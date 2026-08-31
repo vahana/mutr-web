@@ -109,36 +109,21 @@ class Storage:
 
     def update_project(self, name: str, data: dict) -> dict:
         d, f = self.require(name)
-        tracks = []
-        for t in data.get("tracks", []):
-            nt = {k: t.get(k) for k in ("name", "file", "source_file", "volume", "muted", "pitch_baked")}
-            nt["name"] = str(nt.get("name") or "Track")
-            nt["file"] = str(nt.get("file") or "")
-            nt["source_file"] = str(nt.get("source_file") or nt["file"])
-            vol = nt.get("volume")
-            nt["volume"] = min(1.0, max(0.0, float(vol if vol is not None else 1.0)))
-            nt["muted"] = bool(nt.get("muted", False))
-            pb = nt.get("pitch_baked")
-            nt["pitch_baked"] = int(pb if pb is not None else 0)
-            for part in Path(nt["file"]).parts:
-                if part in ("..", "/"):
-                    raise ValueError("invalid track file path")
-            tracks.append(nt)
-        speed = data.get("speed")
-        mv = data.get("master_volume")
-        pos = data.get("position_ms")
-        out = {
-            "version": 1,
-            "tracks": tracks,
-            "markers": sorted(float(m) for m in data.get("markers", [])),
-            "active_segment": int(data.get("active_segment", -1)),
-            "loop_enabled": bool(data.get("loop_enabled", False)),
-            "speed": min(100, max(10, int(speed if speed is not None else 100))),
-            "master_volume": min(100, max(0, int(mv if mv is not None else 80))),
-            "position_ms": float(pos if pos is not None else 0.0),
-            "expanded_video_track": int(data.get("expanded_video_track", -1)),
-        }
         with self.lock(name):
+            out = load_project(f)
+            out["markers"] = sorted(float(m) for m in data.get("markers", []))
+            out["active_segment"] = int(data.get("active_segment", out.get("active_segment", -1)))
+            out["loop_enabled"] = bool(data.get("loop_enabled", out.get("loop_enabled", False)))
+            speed = data.get("speed")
+            mv = data.get("master_volume")
+            pos = data.get("position_ms")
+            out["speed"] = min(100, max(10, int(speed if speed is not None else out.get("speed", 100))))
+            out["master_volume"] = min(100, max(0, int(mv if mv is not None else out.get("master_volume", 80))))
+            out["position_ms"] = float(pos if pos is not None else out.get("position_ms", 0.0))
+            expanded = int(data.get("expanded_video_track", out.get("expanded_video_track", -1)))
+            out["expanded_video_track"] = (
+                expanded if 0 <= expanded < len(out["tracks"]) else -1
+            )
             save_project(f, out)
         return _with_colors(_relativize(dict(out), d))
 

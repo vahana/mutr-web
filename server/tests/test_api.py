@@ -68,20 +68,24 @@ def test_update_clamps(client):
     assert client.get(f"/api/projects/{name}").json()["markers"] == [1000.0, 5000.0]
 
 
-def test_update_zero_volume_kept(client):
+def test_update_ignores_incoming_tracks(client):
     name = _project(client)
+    client.app.state.storage.add_tracks(name, ["a.mp3", "b.mp3"])
     r = client.put(f"/api/projects/{name}", json={
-        "version": 1, "tracks": [{"name": "A", "file": "a.mp3", "source_file": "a.mp3",
-                                  "volume": 0.0, "muted": True, "pitch_baked": 0}],
-        "markers": [], "active_segment": -1, "loop_enabled": False, "speed": 100,
-        "master_volume": 0, "position_ms": 0.0, "expanded_video_track": -1,
+        "version": 1, "tracks": [{"name": "Ghost", "file": "gone.mp3",
+                                  "source_file": "gone.mp3", "volume": 1.0,
+                                  "muted": False, "pitch_baked": 0}],
+        "markers": [1000.0], "active_segment": 0, "loop_enabled": True, "speed": 50,
+        "master_volume": 0, "position_ms": 1234.0, "expanded_video_track": -1,
     })
     assert r.status_code == 200
-    track = r.json()["project"]["tracks"][0]
-    assert track["volume"] == 0.0
-    assert track["muted"] is True
-    assert track["color"] == [60, 110, 170]
-    assert client.get(f"/api/projects/{name}").json()["master_volume"] == 0
+    data = r.json()["project"]
+    assert [t["file"] for t in data["tracks"]] == ["a.mp3", "b.mp3"]
+    assert data["markers"] == [1000.0]
+    assert data["speed"] == 50
+    assert data["master_volume"] == 0
+    assert data["position_ms"] == 1234.0
+    assert client.get(f"/api/projects/{name}").json()["tracks"][0]["file"] == "a.mp3"
 
 
 def _make_wav(path):

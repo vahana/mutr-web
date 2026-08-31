@@ -39,6 +39,7 @@ class YtdlBody(BaseModel):
     url: str
     quality: int = 1080
     audio_only: bool = False
+    container: str = "mp4"
 
 
 @router.post("/projects/{name}/tracks/upload")
@@ -177,9 +178,12 @@ def ytdl_track(name: str, body: YtdlBody, request: Request, background_tasks: Ba
         raise HTTPException(404, "project not found")
     if not body.url.startswith(("http://", "https://")):
         raise HTTPException(400, "invalid url")
+    if body.container not in ("mkv", "mp4"):
+        raise HTTPException(400, "container must be mkv or mp4")
     job = request.app.state.job_manager.create("ytdl", name, -1, "")
     background_tasks.add_task(
         run_job, request.app, job,
-        {"url": body.url, "quality": body.quality, "audio_only": body.audio_only},
+        {"url": body.url, "quality": body.quality, "audio_only": body.audio_only,
+         "container": body.container},
     )
     return {"job_id": job.id}

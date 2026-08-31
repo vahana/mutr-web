@@ -32,6 +32,7 @@ export function TrackRow({ index, track }: Props) {
   const expandedVideo = useProjectStore((s) => s.project?.expanded_video_track ?? -1)
   const [renaming, setRenaming] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [menuUp, setMenuUp] = useState(true)
   const [dialog, setDialog] = useState<'pitch' | 'stems' | 'remove' | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -85,11 +86,6 @@ export function TrackRow({ index, track }: Props) {
               {track.name}
             </span>
           )}
-          {safariBlockedExt && (
-            <span className="codec-warn" title="This format may not play in Safari (mkv/avi/flac/ogg)">
-              ⚠
-            </span>
-          )}
           <WaveformCanvas
             waveform={waveform}
             color={rgb(track.color)}
@@ -103,6 +99,11 @@ export function TrackRow({ index, track }: Props) {
         </div>
       </div>
       <div className="track-panel">
+        {safariBlockedExt && (
+          <span className="codec-warn" title="This format may not play in Safari (mkv/avi/flac/ogg)">
+            ⚠
+          </span>
+        )}
         {isVideo && (
           <button
             className={`mini-btn ${expandedVideo === index ? 'on' : ''}`}
@@ -136,11 +137,24 @@ export function TrackRow({ index, track }: Props) {
         />
         <span className="vol-label">{Math.round(track.volume * 100)}%</span>
         <div className="gear-wrap" ref={menuRef}>
-          <button className="mini-btn" title="Track actions" onClick={() => setMenuOpen((o) => !o)}>
+          <button
+            className="mini-btn"
+            title="Track actions"
+            onClick={(e) => {
+              const btn = e.currentTarget
+              if (!menuOpen) {
+                const rect = btn.getBoundingClientRect()
+                const list = btn.closest('.track-list')?.getBoundingClientRect()
+                const spaceAbove = list ? rect.top - list.top : rect.top
+                setMenuUp(spaceAbove > 140)
+              }
+              setMenuOpen(!menuOpen)
+            }}
+          >
             ⚙
           </button>
           {menuOpen && (
-            <div className="gear-menu">
+            <div className={`gear-menu ${menuUp ? 'up' : 'down'}`}>
               <button onClick={() => { setMenuOpen(false); setDialog('pitch') }}>
                 Pitch Shift…
               </button>

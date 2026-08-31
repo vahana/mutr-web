@@ -70,6 +70,7 @@ def _ytdl_job(app, job, params):
     path = download(
         params["url"], base,
         quality=params["quality"], audio_only=params["audio_only"],
+        container=params.get("container", "mp4"),
         on_line=lambda line: _emit_progress(manager, job, line, parse_ytdlp_progress),
         cancel=cancel,
     )

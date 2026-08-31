@@ -28,27 +28,42 @@ export function VideoPanel() {
 
   if (expandedIdx < 0) return null
 
-  const startResize = (e: React.MouseEvent) => {
+  const startResize = (startClientY: number) => {
     const video = panelRef.current?.querySelector('video')
     if (!video) return
-    const startY = e.clientY
     const startH = video.clientHeight
-    const onMove = (ev: MouseEvent) => {
-      const h = Math.max(100, Math.min(2000, startH + (ev.clientY - startY)))
+    const onMove = (ev: Event) => {
+      const y = ev instanceof TouchEvent
+        ? (ev.touches[0]?.clientY ?? startClientY)
+        : (ev as MouseEvent).clientY
+      const h = Math.max(100, Math.min(2000, startH + (y - startClientY)))
       video.style.height = `${h}px`
       localStorage.setItem('mutr.video_height', String(h))
     }
     const onUp = () => {
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('touchmove', onMove)
+      window.removeEventListener('touchend', onUp)
+      window.removeEventListener('touchcancel', onUp)
     }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
+    window.addEventListener('touchmove', onMove)
+    window.addEventListener('touchend', onUp)
+    window.addEventListener('touchcancel', onUp)
   }
 
   return (
     <div className="video-panel" ref={panelRef}>
-      <div className="resize-handle" onMouseDown={startResize} />
+      <div
+        className="resize-handle"
+        onMouseDown={(e) => startResize(e.clientY)}
+        onTouchStart={(e) => {
+          const t = e.touches[0]
+          if (t) startResize(t.clientY)
+        }}
+      />
     </div>
   )
 }

@@ -231,7 +231,8 @@ export class AudioEngine {
       const el = this.elements[i]
       const t = this.tracks[i]
       if (!t) continue
-      const want = anySolo ? i === this.soloIdx : !t.muted
+      const isVideoEl = el instanceof HTMLVideoElement
+      const want = isVideoEl ? true : anySolo ? i === this.soloIdx : !t.muted
       const has = !!el.src
       if (want && !has) {
         el.src = api.mediaUrl(this.projectName, t.file)
