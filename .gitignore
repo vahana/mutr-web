@@ -1,0 +1,8 @@
+node_modules/
+web/dist/
+server/.venv/
+__pycache__/
+server/data/
+logs/
+nginx/logs/
+.DS_Store
