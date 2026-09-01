@@ -603,6 +603,36 @@ body {
   }
 }
 
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #2a3442;
+  border: 1px solid #3d4c63;
+  border-radius: 6px;
+  padding: 6px 10px;
+  flex-shrink: 0;
+}
+
+.selection-count {
+  font-size: 13px;
+  color: #b9cbe0;
+  font-weight: 600;
+}
+
+.select-box {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: #4a80c0;
+  cursor: pointer;
+}
+
+.text-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;

@@ -30,6 +30,8 @@ export function TrackRow({ index, track }: Props) {
   const setProject = useProjectStore((s) => s.setProject)
   const save = useProjectStore((s) => s.save)
   const expandedVideo = useProjectStore((s) => s.project?.expanded_video_track ?? -1)
+  const selection = useProjectStore((s) => s.selection)
+  const toggleSelect = useProjectStore((s) => s.toggleSelect)
   const [renaming, setRenaming] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuUp, setMenuUp] = useState(true)
@@ -99,6 +101,13 @@ export function TrackRow({ index, track }: Props) {
         </div>
       </div>
       <div className="track-panel">
+        <input
+          type="checkbox"
+          className="select-box"
+          checked={selection.includes(index)}
+          title="Select track"
+          onChange={() => toggleSelect(index)}
+        />
         {safariBlockedExt && (
           <span className="codec-warn" title="This format may not play in Safari (mkv/avi/flac/ogg)">
             ⚠

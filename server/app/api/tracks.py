@@ -42,6 +42,15 @@ class YtdlBody(BaseModel):
     container: str = "mp4"
 
 
+class MergeBody(BaseModel):
+    indices: list[int]
+
+
+class BulkDeleteBody(BaseModel):
+    indices: list[int]
+    delete_files: bool = False
+
+
 @router.post("/projects/{name}/tracks/upload")
 async def upload_tracks(name: str, request: Request, files: list[UploadFile] = File(...)):
     storage = request.app.state.storage
@@ -120,6 +129,33 @@ async def media(name: str, filename: str, request: Request):
     return StreamingResponse(
         iter_bytes(path, 0, size - 1), headers=headers, media_type=media_type,
     )
+
+
+@router.post("/projects/{name}/tracks/merge")
+def merge_tracks_endpoint(name: str, body: MergeBody, request: Request, background_tasks: BackgroundTasks):
+    storage = request.app.state.storage
+    indices = sorted(set(body.indices))
+    if len(indices) < 2:
+        raise HTTPException(400, "select at least two tracks")
+    try:
+        for i in indices:
+            storage.track(name, i)
+    except NotFoundError as e:
+        raise HTTPException(404, str(e))
+    track0 = storage.track(name, indices[0])
+    job = request.app.state.job_manager.create("merge", name, indices[0], track0["file"])
+    background_tasks.add_task(run_job, request.app, job, {"indices": indices})
+    return {"job_id": job.id}
+
+
+@router.post("/projects/{name}/tracks/delete", status_code=204)
+def bulk_delete_tracks(name: str, body: BulkDeleteBody, request: Request):
+    storage = request.app.state.storage
+    try:
+        storage.require(name)
+        storage.remove_tracks(name, body.indices, body.delete_files)
+    except NotFoundError as e:
+        raise HTTPException(404, str(e))
 
 
 @router.get("/projects/{name}/waveforms/{idx}")

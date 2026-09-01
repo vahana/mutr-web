@@ -1,6 +1,9 @@
 import asyncio
 
+from mutr_core.media import is_video
+from mutr_core.merge import merge_tracks
 from mutr_core.pitch import pitch_path, pitch_shift
+from mutr_core.paths import ensure_unique_file
 from mutr_core.process import CancelledError
 from mutr_core.stems import (
     DEFAULT_MODEL, DEFAULT_SHIFTS, STEM_ORDER, parse_demucs_progress, split_stems,
@@ -77,6 +80,36 @@ def _ytdl_job(app, job, params):
     return {"files": [path.name], "names": [path.stem]}
 
 
+def _merge_job(app, job, params):
+    storage = app.state.storage
+    manager = app.state.job_manager
+    cancel = manager.cancel_event(job.id)
+    base, _ = storage.require(job.project)
+    indices = params["indices"]
+    if len(indices) < 2:
+        raise RuntimeError("select at least two tracks to merge")
+    data = storage.get_project(job.project)
+    tracks = [data["tracks"][i] for i in indices]
+    files = [base / t["file"] for t in tracks]
+    for p in files:
+        if not p.is_file():
+            raise RuntimeError(f"track file not found: {p.name}")
+    video_file = next((p for p, t in zip(files, tracks) if is_video(p)), None)
+    audio_files = [p for p, t in zip(files, tracks) if not is_video(p)]
+    if video_file is not None and not audio_files:
+        raise RuntimeError("no audio tracks selected for the mix")
+    first = tracks[0]
+    ext = ".mp4" if video_file is not None else ".wav"
+    out = ensure_unique_file(base, f"{first['name']} mix{ext}")
+    merge_tracks(
+        audio_files, out,
+        on_line=lambda line: _emit_progress(manager, job, line),
+        cancel=cancel,
+        video=video_file,
+    )
+    return {"files": [out.name], "names": [f"{first['name']} mix"]}
+
+
 async def _apply_result(app, job, result):
     manager = app.state.job_manager
     storage = app.state.storage
@@ -101,6 +134,8 @@ async def run_job(app, job, params):
                 result = await asyncio.to_thread(_stems_job, app, job, params)
         elif job.kind == "ytdl":
             result = await asyncio.to_thread(_ytdl_job, app, job, params)
+        elif job.kind == "merge":
+            result = await asyncio.to_thread(_merge_job, app, job, params)
         else:
             result = await asyncio.to_thread(_pitch_job, app, job, params)
     except CancelledError:

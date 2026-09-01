@@ -7,6 +7,7 @@ const KIND_LABEL: Record<string, string> = {
   pitch: 'Pitch shift',
   stems: 'Stem split',
   ytdl: 'YouTube download',
+  merge: 'Merge tracks',
 }
 
 function useNow(active: boolean): number {

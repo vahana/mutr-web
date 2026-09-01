@@ -32,7 +32,7 @@ export interface Waveform {
 }
 
 export type JobStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled'
-export type JobKind = 'pitch' | 'stems' | 'ytdl'
+export type JobKind = 'pitch' | 'stems' | 'ytdl' | 'merge'
 
 export interface Job {
   id: string

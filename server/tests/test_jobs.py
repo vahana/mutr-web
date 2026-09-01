@@ -141,6 +141,53 @@ def test_pitch_missing_file_job_errors(client):
     assert len(client.get(f"/api/projects/{name}").json()["tracks"]) == 1
 
 
+@needs_ffmpeg
+def test_merge_job_end_to_end(tmp_path, client):
+    name = _project(client)
+    a = tmp_path / "a.wav"
+    b = tmp_path / "b.wav"
+    _make_wav(a)
+    _make_wav(b, seconds=1.5)
+    _upload(client, name, "a.wav", a)
+    _upload(client, name, "b.wav", b)
+    r = client.post(f"/api/projects/{name}/tracks/merge", json={"indices": [0, 1]})
+    assert r.status_code == 200
+    job = _wait_job(client, r.json()["job_id"])
+    assert job["status"] == "done", job
+    assert len(job["added_tracks"]) == 1
+    assert job["added_tracks"][0]["name"] == "a mix"
+    project = client.get(f"/api/projects/{name}").json()
+    assert len(project["tracks"]) == 3
+    d = client.app.state.settings.projects_dir / name
+    assert (d / "a mix.wav").exists()
+
+
+def test_merge_validation(client):
+    name = _project(client)
+    d = client.app.state.settings.projects_dir / name
+    (d / "a.mp3").write_bytes(b"data")
+    client.app.state.storage.add_tracks(name, ["a.mp3"])
+    r = client.post(f"/api/projects/{name}/tracks/merge", json={"indices": [0]})
+    assert r.status_code == 400
+    r = client.post(f"/api/projects/{name}/tracks/merge", json={"indices": [0, 9]})
+    assert r.status_code == 404
+
+
+def test_bulk_delete(client):
+    name = _project(client)
+    d = client.app.state.settings.projects_dir / name
+    for f in ("a.mp3", "b.mp3", "c.mp3"):
+        (d / f).write_bytes(b"data")
+    client.app.state.storage.add_tracks(name, ["a.mp3", "b.mp3", "c.mp3"])
+    r = client.post(f"/api/projects/{name}/tracks/delete",
+                    json={"indices": [2, 0], "delete_files": True})
+    assert r.status_code == 204
+    project = client.get(f"/api/projects/{name}").json()
+    assert [t["file"] for t in project["tracks"]] == ["b.mp3"]
+    assert not (d / "a.mp3").exists()
+    assert not (d / "c.mp3").exists()
+
+
 def test_stems_validation(client):
     name = _project(client)
     d = client.app.state.settings.projects_dir / name

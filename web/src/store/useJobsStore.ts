@@ -119,5 +119,6 @@ function scheduleDismiss(jobId: string) {
 function kindLabel(kind: JobKind): string {
   if (kind === 'pitch') return 'Pitch shift'
   if (kind === 'stems') return 'Stem split'
+  if (kind === 'merge') return 'Merge tracks'
   return 'YouTube download'
 }

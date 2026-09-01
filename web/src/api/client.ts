@@ -110,6 +110,18 @@ export const api = {
   getWaveform: (name: string, idx: number) =>
     fetch(`${BASE}/projects/${encodeURIComponent(name)}/waveforms/${idx}`).then(handle<Waveform>),
 
+  mergeTracks: (name: string, indices: number[]) =>
+    fetch(
+      `${BASE}/projects/${encodeURIComponent(name)}/tracks/merge`,
+      json('POST', { indices }),
+    ).then(handle<{ job_id: string }>),
+
+  deleteTracks: (name: string, indices: number[], deleteFiles: boolean) =>
+    fetch(
+      `${BASE}/projects/${encodeURIComponent(name)}/tracks/delete`,
+      json('POST', { indices, delete_files: deleteFiles }),
+    ).then(handle<void>),
+
   getJob: (jobId: string) => fetch(`${BASE}/jobs/${jobId}`).then(handle<Job>),
 
   cancelJob: (jobId: string) =>

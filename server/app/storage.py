@@ -221,6 +221,22 @@ class Storage:
             t_out["source_file"] = _to_rel(t["source_file"], d)
             return dict(t_out, color=list(track_color(idx)))
 
+    def remove_tracks(self, name: str, indices: list[int], delete_files: bool = False) -> None:
+        d, f = self.require(name)
+        with self.lock(name):
+            data = load_project(f)
+            removed = []
+            for idx in sorted(set(indices), reverse=True):
+                if 0 <= idx < len(data["tracks"]):
+                    removed.append(data["tracks"].pop(idx))
+            save_project(f, data)
+        for t in removed:
+            if delete_files:
+                file_path = d / t["file"]
+                if file_path.exists():
+                    file_path.unlink()
+            (self._settings.cache_dir / name / f"{Path(t['file']).name}.json").unlink(missing_ok=True)
+
     def remove_track(self, name: str, idx: int, delete_file: bool = False) -> None:
         d, f = self.require(name)
         with self.lock(name):

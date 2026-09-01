@@ -31,6 +31,9 @@ interface ProjectStore {
   setSolo: (idx: number) => void
   controlsCollapsed: boolean
   toggleControls: () => void
+  selection: number[]
+  toggleSelect: (idx: number) => void
+  clearSelection: () => void
 }
 
 export const useProjectStore = create<ProjectStore>((set, get) => ({
@@ -65,7 +68,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     set({ loading: true })
     try {
       const project = await api.getProject(name)
-      set({ projectName: name, project, waveforms: {} })
+      set({ projectName: name, project, waveforms: {}, selection: [] })
       const fetchWaveform = get().fetchWaveform
       await Promise.all(project.tracks.map((_, i) => fetchWaveform(i).catch(() => {})))
     } catch (e) {
@@ -99,7 +102,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     }
   },
 
-  close: () => set({ project: null, projectName: null, waveforms: {} }),
+  close: () => set({ project: null, projectName: null, waveforms: {}, selection: [] }),
 
   removeProject: async (name, deleteFiles = true) => {
     try {
@@ -196,6 +199,16 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     localStorage.setItem('mutr.controls_collapsed', next ? '1' : '0')
     set({ controlsCollapsed: next })
   },
+
+  selection: [],
+  toggleSelect: (idx) => {
+    const { selection } = get()
+    const next = selection.includes(idx)
+      ? selection.filter((i) => i !== idx)
+      : [...selection, idx].sort((a, b) => a - b)
+    set({ selection: next })
+  },
+  clearSelection: () => set({ selection: [] }),
 }))
 
 export function trackLabel(t: Track): string {
