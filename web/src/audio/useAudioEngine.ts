@@ -34,7 +34,7 @@ export function useAudioEngine(containerRef: RefObject<HTMLDivElement>) {
     engine.load(
       projectName,
       project.tracks,
-      project.position_ms,
+      engine.getPositionMs() || project.position_ms,
       project.speed,
       project.master_volume,
     )

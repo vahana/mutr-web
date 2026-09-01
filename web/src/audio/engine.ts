@@ -85,6 +85,7 @@ export class AudioEngine {
   clear() {
     this.teardown()
     this.tracks = []
+    this._positionMs = 0
     this.emit()
   }
 

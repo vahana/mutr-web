@@ -199,6 +199,27 @@ body {
   flex-shrink: 0;
 }
 
+.drag-handle {
+  width: 14px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  cursor: grab;
+  font-size: 14px;
+  touch-action: none;
+  user-select: none;
+}
+
+.drag-handle:hover {
+  color: #aaa;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
 .track-name {
   width: 90px;
   flex-shrink: 0;

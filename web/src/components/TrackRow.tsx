@@ -32,7 +32,11 @@ export function TrackRow({ index, track }: Props) {
   const expandedVideo = useProjectStore((s) => s.project?.expanded_video_track ?? -1)
   const selection = useProjectStore((s) => s.selection)
   const toggleSelect = useProjectStore((s) => s.toggleSelect)
+  const reorder = useProjectStore((s) => s.reorder)
+  const trackCount = useProjectStore((s) => s.project?.tracks.length ?? 0)
   const [renaming, setRenaming] = useState(false)
+  const rowRef = useRef<HTMLDivElement>(null)
+  const dragState = useRef<{ y: number; idx: number; moved: boolean } | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuUp, setMenuUp] = useState(true)
   const [dialog, setDialog] = useState<'pitch' | 'stems' | 'remove' | null>(null)
@@ -64,9 +68,52 @@ export function TrackRow({ index, track }: Props) {
   }
 
   return (
-    <div className="track-row">
+    <div className="track-row" ref={rowRef}>
       <div className="track-left">
         <div className="track-controls">
+          <span
+            className="drag-handle"
+            title="Drag to reorder"
+            onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture(e.pointerId)
+              dragState.current = { y: e.clientY, idx: index, moved: false }
+            }}
+            onPointerMove={(e) => {
+              const st = dragState.current
+              if (!st || !rowRef.current) return
+              const dy = e.clientY - st.y
+              if (!st.moved && Math.abs(dy) < 6) return
+              st.moved = true
+              rowRef.current.style.position = 'relative'
+              rowRef.current.style.zIndex = '10'
+              rowRef.current.style.transform = `translateY(${dy}px)`
+            }}
+            onPointerUp={(e) => {
+              const st = dragState.current
+              dragState.current = null
+              if (!st || !rowRef.current) return
+              rowRef.current.style.transform = ''
+              rowRef.current.style.zIndex = ''
+              rowRef.current.style.position = ''
+              if (!st.moved) return
+              const rowH = rowRef.current.offsetHeight || 1
+              const target = Math.max(
+                0,
+                Math.min(trackCount - 1, st.idx + Math.round((e.clientY - st.y) / rowH)),
+              )
+              if (target !== st.idx) void reorder(st.idx, target)
+            }}
+            onPointerCancel={() => {
+              dragState.current = null
+              if (rowRef.current) {
+                rowRef.current.style.transform = ''
+                rowRef.current.style.zIndex = ''
+                rowRef.current.style.position = ''
+              }
+            }}
+          >
+            ≡
+          </span>
           <span className="swatch" style={{ background: rgb(track.color) }} />
           {renaming ? (
             <input

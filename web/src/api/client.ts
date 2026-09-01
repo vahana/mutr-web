@@ -122,6 +122,12 @@ export const api = {
       json('POST', { indices, delete_files: deleteFiles }),
     ).then(handle<void>),
 
+  reorderTracks: (name: string, fromIndex: number, toIndex: number) =>
+    fetch(
+      `${BASE}/projects/${encodeURIComponent(name)}/tracks/reorder`,
+      json('POST', { from_index: fromIndex, to_index: toIndex }),
+    ).then(handle<void>),
+
   getJob: (jobId: string) => fetch(`${BASE}/jobs/${jobId}`).then(handle<Job>),
 
   cancelJob: (jobId: string) =>

@@ -199,6 +199,24 @@ def test_delete_track_with_file(client):
     assert client.get(f"/api/projects/{name}").json()["tracks"] == []
 
 
+def test_reorder_track(client):
+    name = _project(client)
+    client.app.state.storage.add_tracks(name, ["a.mp3", "b.mp3", "c.mp3"])
+    r = client.post(f"/api/projects/{name}/tracks/reorder",
+                    json={"from_index": 0, "to_index": 2})
+    assert r.status_code == 204
+    project = client.get(f"/api/projects/{name}").json()
+    assert [t["file"] for t in project["tracks"]] == ["b.mp3", "c.mp3", "a.mp3"]
+    r = client.post(f"/api/projects/{name}/tracks/reorder",
+                    json={"from_index": 2, "to_index": 0})
+    assert r.status_code == 204
+    project = client.get(f"/api/projects/{name}").json()
+    assert [t["file"] for t in project["tracks"]] == ["a.mp3", "b.mp3", "c.mp3"]
+    r = client.post(f"/api/projects/{name}/tracks/reorder",
+                    json={"from_index": 9, "to_index": 0})
+    assert r.status_code == 404
+
+
 def test_rename_project(client):
     name = _project(client)
     r = client.post(f"/api/projects/{name}/rename", json={"new_name": "Bar"})

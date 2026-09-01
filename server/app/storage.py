@@ -221,6 +221,20 @@ class Storage:
             t_out["source_file"] = _to_rel(t["source_file"], d)
             return dict(t_out, color=list(track_color(idx)))
 
+    def reorder_track(self, name: str, from_idx: int, to_idx: int) -> None:
+        d, f = self.require(name)
+        with self.lock(name):
+            data = load_project(f)
+            tracks = data["tracks"]
+            if from_idx < 0 or from_idx >= len(tracks):
+                raise NotFoundError(f"track {from_idx}")
+            to_idx = max(0, min(len(tracks) - 1, to_idx))
+            if from_idx == to_idx:
+                return
+            t = tracks.pop(from_idx)
+            tracks.insert(to_idx, t)
+            save_project(f, data)
+
     def remove_tracks(self, name: str, indices: list[int], delete_files: bool = False) -> None:
         d, f = self.require(name)
         with self.lock(name):

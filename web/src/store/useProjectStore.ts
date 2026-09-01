@@ -34,6 +34,7 @@ interface ProjectStore {
   selection: number[]
   toggleSelect: (idx: number) => void
   clearSelection: () => void
+  reorder: (from: number, to: number) => Promise<void>
 }
 
 export const useProjectStore = create<ProjectStore>((set, get) => ({
@@ -209,6 +210,35 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     set({ selection: next })
   },
   clearSelection: () => set({ selection: [] }),
+
+  reorder: async (from, to) => {
+    const { project, projectName, selection } = get()
+    if (!project || !projectName || from === to) return
+    const tracks = [...project.tracks]
+    const [t] = tracks.splice(from, 1)
+    tracks.splice(to, 0, t)
+    const remap = (i: number) => {
+      if (i === from) return to
+      if (from < to && i > from && i <= to) return i - 1
+      if (from > to && i >= to && i < from) return i + 1
+      return i
+    }
+    set({
+      project: {
+        ...project,
+        tracks,
+        expanded_video_track:
+          project.expanded_video_track >= 0 ? remap(project.expanded_video_track) : -1,
+      },
+      selection: selection.map(remap),
+    })
+    try {
+      await api.reorderTracks(projectName, from, to)
+    } catch (e) {
+      pushToast(errMsg(e), 'error')
+      await get().openProject(projectName)
+    }
+  },
 }))
 
 export function trackLabel(t: Track): string {

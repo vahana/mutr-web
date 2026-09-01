@@ -51,6 +51,11 @@ class BulkDeleteBody(BaseModel):
     delete_files: bool = False
 
 
+class ReorderBody(BaseModel):
+    from_index: int
+    to_index: int
+
+
 @router.post("/projects/{name}/tracks/upload")
 async def upload_tracks(name: str, request: Request, files: list[UploadFile] = File(...)):
     storage = request.app.state.storage
@@ -154,6 +159,15 @@ def bulk_delete_tracks(name: str, body: BulkDeleteBody, request: Request):
     try:
         storage.require(name)
         storage.remove_tracks(name, body.indices, body.delete_files)
+    except NotFoundError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.post("/projects/{name}/tracks/reorder", status_code=204)
+def reorder_track_endpoint(name: str, body: ReorderBody, request: Request):
+    storage = request.app.state.storage
+    try:
+        storage.reorder_track(name, body.from_index, body.to_index)
     except NotFoundError as e:
         raise HTTPException(404, str(e))
 
