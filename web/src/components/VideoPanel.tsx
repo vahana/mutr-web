@@ -33,7 +33,7 @@ export function VideoPanel() {
     if (!video) return
     const startH = video.clientHeight
     const onMove = (ev: Event) => {
-      const y = ev instanceof TouchEvent
+      const y = typeof TouchEvent !== 'undefined' && ev instanceof TouchEvent
         ? (ev.touches[0]?.clientY ?? startClientY)
         : (ev as MouseEvent).clientY
       const h = Math.max(100, Math.min(2000, startH + (y - startClientY)))
