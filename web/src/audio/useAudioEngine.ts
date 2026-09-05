@@ -155,7 +155,7 @@ export function useAudioEngine(containerRef: RefObject<HTMLDivElement>) {
         case 's':
           if (e.metaKey || e.ctrlKey) {
             e.preventDefault()
-            void save()
+            useProjectStore.getState().openNamePrompt()
           }
           break
       }

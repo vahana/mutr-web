@@ -20,6 +20,9 @@ interface ProjectStore {
   openProject: (name: string) => Promise<void>
   save: () => Promise<void>
   saveAs: (name: string) => Promise<void>
+  namePromptOpen: boolean
+  openNamePrompt: () => void
+  closeNamePrompt: () => void
   close: () => void
   removeProject: (name: string, deleteFiles?: boolean) => Promise<void>
   patchTrack: (idx: number, patch: { volume?: number; muted?: boolean; name?: string }) => Promise<void>
@@ -43,6 +46,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   recents: [],
   waveforms: {},
   loading: false,
+  namePromptOpen: false,
+
+  openNamePrompt: () => set({ namePromptOpen: true }),
+  closeNamePrompt: () => set({ namePromptOpen: false }),
 
   refreshRecents: async () => {
     try {
@@ -103,7 +110,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     }
   },
 
-  close: () => set({ project: null, projectName: null, waveforms: {}, selection: [] }),
+  close: () => set({ project: null, projectName: null, waveforms: {}, selection: [], namePromptOpen: false }),
 
   removeProject: async (name, deleteFiles = true) => {
     try {

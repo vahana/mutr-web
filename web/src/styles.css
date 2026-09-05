@@ -713,7 +713,8 @@ body {
   font-size: 13px;
 }
 
-.ytdl-url {
+.ytdl-url,
+.prompt-input {
   flex: 1;
   background: #1a1a1a;
   border: 1px solid #4a4a4a;

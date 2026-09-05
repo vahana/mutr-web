@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import { useAudioEngine } from '../audio/useAudioEngine'
 import { useProjectStore } from '../store/useProjectStore'
 import { ConfirmDialog } from './dialogs/ConfirmDialog'
+import { PromptDialog } from './dialogs/PromptDialog'
 import { YtdlDialog } from './dialogs/YtdlDialog'
 import { DropZone } from './DropZone'
 import { JobDock } from './JobDock'
@@ -14,6 +15,10 @@ export function ProjectScreen() {
   const projectName = useProjectStore((s) => s.projectName)
   const project = useProjectStore((s) => s.project)
   const save = useProjectStore((s) => s.save)
+  const saveAs = useProjectStore((s) => s.saveAs)
+  const namePromptOpen = useProjectStore((s) => s.namePromptOpen)
+  const openNamePrompt = useProjectStore((s) => s.openNamePrompt)
+  const closeNamePrompt = useProjectStore((s) => s.closeNamePrompt)
   const close = useProjectStore((s) => s.close)
   const removeProject = useProjectStore((s) => s.removeProject)
   const controlsCollapsed = useProjectStore((s) => s.controlsCollapsed)
@@ -28,7 +33,7 @@ export function ProjectScreen() {
   return (
     <div className={`project ${controlsCollapsed ? 'controls-collapsed' : ''}`}>
       <div className="topbar">
-        <button className="icon-btn" title="Save (Cmd+S)" onClick={() => void save()}>
+        <button className="icon-btn" title="Save (Cmd+S)" onClick={openNamePrompt}>
           💾
         </button>
         <a
@@ -62,6 +67,19 @@ export function ProjectScreen() {
       <DropZone />
       <div ref={mediaContainerRef} className="media-container" />
       {ytdlOpen && <YtdlDialog onClose={() => setYtdlOpen(false)} />}
+      {namePromptOpen && (
+        <PromptDialog
+          title="Save Project"
+          initial={projectName}
+          confirmLabel="Save"
+          onConfirm={(name) => {
+            closeNamePrompt()
+            if (name === projectName) void save()
+            else void saveAs(name)
+          }}
+          onCancel={closeNamePrompt}
+        />
+      )}
       {deleteOpen && (
         <ConfirmDialog
           title="Delete Project"
