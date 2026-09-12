@@ -51,7 +51,7 @@ export function ProjectScreen() {
         </button>
         <button
           className="icon-btn"
-          title="Upload audio/video files"
+          title="Add Track"
           onClick={() => fileInputRef.current?.click()}
         >
           📁
