@@ -16,8 +16,9 @@ const SEG_COLORS: [string, string][] = [
 ]
 
 function msToStr(ms: number): string {
-  const s = Math.round(ms / 1000)
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  const s = ms / 1000
+  const secs = Number.isInteger(s) ? String(s % 60).padStart(2, '0') : `${s % 60}.5`
+  return `${Math.floor(s / 60)}:${secs}`
 }
 
 export function LoopBar() {
@@ -205,7 +206,7 @@ export function LoopBar() {
     const lo = i > 0 ? markers[i - 1] : 0
     const hi = i < markers.length - 1 ? markers[i + 1] : total
     let ms = snapToSecond(xToMs(clientX))
-    ms = Math.max(lo + 1000, Math.min(hi - 1000, ms))
+    ms = Math.max(lo + 500, Math.min(hi - 500, ms))
     if (ms === markers[i]) return
     dragMoved.current = true
     const next = markers.map((m, idx) => (idx === i ? ms : m))
