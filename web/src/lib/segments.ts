@@ -9,8 +9,10 @@ export function getSegmentBounds(
   return [all[idx], all[idx + 1]]
 }
 
+export const SNAP_MS = 500
+
 export function snapToSecond(ms: number): number {
-  return Math.round(ms / 500) * 500
+  return Math.round(ms / SNAP_MS) * SNAP_MS
 }
 
 export function nearestMarker(markers: number[], ms: number, radiusMs: number): number | null {

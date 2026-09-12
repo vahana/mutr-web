@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { engine } from '../audio/engine'
-import { getSegmentBounds, nearestMarker, segmentAt, snapToSecond } from '../lib/segments'
+import { getSegmentBounds, nearestMarker, segmentAt, snapToSecond, SNAP_MS } from '../lib/segments'
 import { useProjectStore } from '../store/useProjectStore'
 
 const BAR_H = 20
@@ -17,7 +17,8 @@ const SEG_COLORS: [string, string][] = [
 
 function msToStr(ms: number): string {
   const s = ms / 1000
-  const secs = Number.isInteger(s) ? String(s % 60).padStart(2, '0') : `${s % 60}.5`
+  const secPart = s % 60
+  const secs = Number.isInteger(secPart) ? String(secPart).padStart(2, '0') : String(secPart)
   return `${Math.floor(s / 60)}:${secs}`
 }
 
@@ -206,7 +207,7 @@ export function LoopBar() {
     const lo = i > 0 ? markers[i - 1] : 0
     const hi = i < markers.length - 1 ? markers[i + 1] : total
     let ms = snapToSecond(xToMs(clientX))
-    ms = Math.max(lo + 500, Math.min(hi - 500, ms))
+    ms = Math.max(lo + SNAP_MS, Math.min(hi - SNAP_MS, ms))
     if (ms === markers[i]) return
     dragMoved.current = true
     const next = markers.map((m, idx) => (idx === i ? ms : m))
