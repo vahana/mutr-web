@@ -54,7 +54,7 @@ export function ProjectScreen() {
           title="Add Track"
           onClick={() => fileInputRef.current?.click()}
         >
-          📁
+          ➕
         </button>
         <input
           ref={fileInputRef}
