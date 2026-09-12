@@ -24,6 +24,8 @@ export function ProjectScreen() {
   const controlsCollapsed = useProjectStore((s) => s.controlsCollapsed)
   const toggleControls = useProjectStore((s) => s.toggleControls)
   const mediaContainerRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const addFiles = useProjectStore((s) => s.addFiles)
   const [ytdlOpen, setYtdlOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   useAudioEngine(mediaContainerRef)
@@ -47,6 +49,25 @@ export function ProjectScreen() {
         <button className="icon-btn" title="Download from YouTube" onClick={() => setYtdlOpen(true)}>
           📺
         </button>
+        <button
+          className="icon-btn"
+          title="Upload audio/video files"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          📁
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          hidden
+          accept=".mp4,.mkv,.mov,.avi,.webm,.mp3,.wav,.flac,.aac,.m4a,.ogg"
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? [])
+            if (files.length > 0) void addFiles(files)
+            e.target.value = ''
+          }}
+        />
         <span className="spacer" />
         <span className="project-name">{projectName}</span>
         <span className="spacer" />
