@@ -41,7 +41,7 @@ export function VideoPanel() {
       const y = typeof TouchEvent !== 'undefined' && ev instanceof TouchEvent
         ? (ev.touches[0]?.clientY ?? startClientY)
         : (ev as MouseEvent).clientY
-      const h = Math.max(100, Math.min(2000, startH + (y - startClientY)))
+      const h = Math.max(100, Math.min(2000, startH + (startClientY - y)))
       video.style.height = `${h}px`
       localStorage.setItem('mutr.video_height', String(h))
     }
