@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { engine } from '../audio/engine'
 import { useProjectStore } from '../store/useProjectStore'
@@ -6,11 +6,15 @@ import { useProjectStore } from '../store/useProjectStore'
 export function VideoPanel() {
   const expandedIdx = useProjectStore((s) => s.project?.expanded_video_track ?? -1)
   const panelRef = useRef<HTMLDivElement>(null)
+  const [tick, setTick] = useState(0)
+
+  useEffect(() => engine.subscribe(() => setTick((t) => t + 1)), [])
 
   useEffect(() => {
     const panel = panelRef.current
     if (!panel) return
     const wanted = expandedIdx >= 0 ? engine.getElement(expandedIdx) : null
+    if (panel.querySelector('video') === wanted) return
     for (const v of Array.from(panel.querySelectorAll('video'))) {
       if (v !== wanted) {
         engine.mediaContainer?.appendChild(v)
@@ -24,7 +28,8 @@ export function VideoPanel() {
       const saved = Math.max(100, Math.min(2000, Number(localStorage.getItem('mutr.video_height') ?? 480)))
       wanted.style.height = `${saved}px`
     }
-  }, [expandedIdx])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedIdx, tick])
 
   if (expandedIdx < 0) return null
 
