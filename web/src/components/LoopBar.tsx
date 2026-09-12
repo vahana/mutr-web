@@ -26,8 +26,12 @@ export function LoopBar() {
   const setProject = useProjectStore((s) => s.setProject)
   const save = useProjectStore((s) => s.save)
   const [, setTick] = useState(0)
+  const [sticky, setSticky] = useState<number | null>(null)
   const dragging = useRef<number | null>(null)
   const dragMoved = useRef(false)
+  const pressIndex = useRef<number | null>(null)
+  const pressStartX = useRef(0)
+  const longPressTimer = useRef<number | null>(null)
 
   const markers = project?.markers ?? []
   const activeSegment = project?.active_segment ?? -1
@@ -72,11 +76,14 @@ export function LoopBar() {
       }
       ctx.strokeStyle = 'rgba(200,200,200,0.8)'
       ctx.lineWidth = 1
-      for (const m of markers) {
-        const mx = x(m)
+      for (let mi = 0; mi < markers.length; mi++) {
+        const mx = x(markers[mi])
+        const isStuck = mi === sticky
         ctx.beginPath()
         ctx.moveTo(mx, 0)
         ctx.lineTo(mx, BAR_H)
+        ctx.strokeStyle = isStuck ? 'rgb(80,200,255)' : 'rgba(200,200,200,0.8)'
+        ctx.lineWidth = isStuck ? 2 : 1
         ctx.stroke()
       }
       ctx.fillStyle = 'rgb(22,22,22)'
@@ -125,7 +132,7 @@ export function LoopBar() {
       cancelAnimationFrame(raf)
       ro.disconnect()
     }
-  }, [markers, activeSegment, loopEnabled, setProject, save])
+  }, [markers, activeSegment, loopEnabled, sticky, setProject, save])
 
   const xToMs = (clientX: number) => {
     const canvas = canvasRef.current
@@ -154,10 +161,22 @@ export function LoopBar() {
   const onMouseDown = (e: React.MouseEvent) => {
     const total = engine.getDurationMs()
     if (total <= 0) return
+    if (sticky !== null) {
+      releaseSticky()
+      return
+    }
     const i = markerAt(e.clientX)
     if (i !== null) {
-      dragging.current = i
-      dragMoved.current = false
+      pressIndex.current = i
+      pressStartX.current = e.clientX
+      longPressTimer.current = window.setTimeout(() => {
+        longPressTimer.current = null
+        if (pressIndex.current !== null && dragging.current === null) {
+          pressIndex.current = null
+          dragMoved.current = false
+          setSticky(i)
+        }
+      }, 400)
       return
     }
     const seg = segmentAt(markers, total, xToMs(e.clientX))
@@ -180,9 +199,7 @@ export function LoopBar() {
     updateMarkers([...markers, ms].sort((a, b) => a - b))
   }
 
-  const moveDrag = (clientX: number) => {
-    const i = dragging.current
-    if (i === null) return
+  const moveMarker = (i: number, clientX: number) => {
     const total = engine.getDurationMs()
     if (total <= 0) return
     const lo = i > 0 ? markers[i - 1] : 0
@@ -195,6 +212,10 @@ export function LoopBar() {
     setProject((p) => ({ ...p, markers: next }))
   }
 
+  const moveDrag = (clientX: number) => {
+    if (dragging.current !== null) moveMarker(dragging.current, clientX)
+  }
+
   const endDrag = () => {
     dragging.current = null
     if (dragMoved.current) {
@@ -203,24 +224,60 @@ export function LoopBar() {
     }
   }
 
+  const releaseSticky = () => {
+    setSticky(null)
+    if (dragMoved.current) {
+      dragMoved.current = false
+      void save()
+    }
+  }
+
   useEffect(() => {
-    if (dragging.current === null) return
-    const onMove = (e: MouseEvent) => moveDrag(e.clientX)
-    const onUp = () => endDrag()
+    const onMove = (e: MouseEvent) => {
+      if (sticky !== null) {
+        moveMarker(sticky, e.clientX)
+        return
+      }
+      if (dragging.current !== null) {
+        moveDrag(e.clientX)
+        return
+      }
+      if (pressIndex.current !== null && Math.abs(e.clientX - pressStartX.current) > 4) {
+        if (longPressTimer.current !== null) {
+          window.clearTimeout(longPressTimer.current)
+          longPressTimer.current = null
+        }
+        dragging.current = pressIndex.current
+        pressIndex.current = null
+        moveDrag(e.clientX)
+      }
+    }
+    const onUp = () => {
+      if (longPressTimer.current !== null) {
+        window.clearTimeout(longPressTimer.current)
+        longPressTimer.current = null
+      }
+      pressIndex.current = null
+      endDrag()
+    }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
     return () => {
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
+      if (longPressTimer.current !== null) {
+        window.clearTimeout(longPressTimer.current)
+        longPressTimer.current = null
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [markers, setProject, save])
+  }, [markers, sticky, setProject, save])
 
   return (
     <canvas
       ref={canvasRef}
       className="loop-bar"
-      style={{ height: TOTAL_H }}
+      style={{ height: TOTAL_H, cursor: sticky !== null ? 'grabbing' : undefined }}
       onMouseDown={onMouseDown}
       onDoubleClick={onDoubleClick}
       onTouchStart={(e) => {
