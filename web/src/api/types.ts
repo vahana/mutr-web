@@ -18,6 +18,7 @@ export interface Project {
   master_volume: number
   position_ms: number
   expanded_video_track: number
+  skipped_segments: number[]
 }
 
 export interface ProjectInfo {

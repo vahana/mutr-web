@@ -2,7 +2,7 @@ import { useEffect, type RefObject } from 'react'
 
 import { api } from '../api/client'
 import type { Project } from '../api/types'
-import { getSegmentBounds, nearestMarker } from '../lib/segments'
+import { getSegmentBounds, nearestMarker, remapSkipsOnRemove } from '../lib/segments'
 import { useProjectStore } from '../store/useProjectStore'
 import { engine } from './engine'
 
@@ -43,8 +43,8 @@ export function useAudioEngine(containerRef: RefObject<HTMLDivElement>) {
 
   useEffect(() => {
     if (!project) return
-    engine.setLoop(project.markers, project.active_segment, project.loop_enabled)
-  }, [project?.markers, project?.active_segment, project?.loop_enabled])
+    engine.setLoop(project.markers, project.active_segment, project.loop_enabled, project.skipped_segments)
+  }, [project?.markers, project?.active_segment, project?.loop_enabled, project?.skipped_segments])
 
   useEffect(() => {
     engine.setSpeed(project?.speed ?? 100)
@@ -126,6 +126,11 @@ export function useAudioEngine(containerRef: RefObject<HTMLDivElement>) {
           setProject((proj) => ({ ...proj, loop_enabled: !proj.loop_enabled }))
           void save()
           break
+        case 'x':
+        case 'X':
+          if (e.metaKey || e.ctrlKey) break
+          useProjectStore.getState().toggleSkipActive()
+          break
         case 'd':
         case 'D':
           if (p.markers.length === 0) break
@@ -138,6 +143,7 @@ export function useAudioEngine(containerRef: RefObject<HTMLDivElement>) {
               setProject((proj) => ({
                 ...proj,
                 markers,
+                skipped_segments: remapSkipsOnRemove(proj.skipped_segments, idx),
                 active_segment: Math.min(proj.active_segment, markers.length),
               }))
               void save()
@@ -182,6 +188,7 @@ export function useAudioEngine(containerRef: RefObject<HTMLDivElement>) {
       const total = engine.getDurationMs()
       if (total <= 0 || p.markers.length === 0) return
       const nSegs = p.markers.length + 1
+      const skipped = new Set(p.skipped_segments)
       let cur = Math.max(0, p.active_segment)
       if (delta < 0) {
         const pos = engine.getPositionMs()
@@ -194,9 +201,12 @@ export function useAudioEngine(containerRef: RefObject<HTMLDivElement>) {
           }
         }
         cur = pos - all[cur] > 1000 ? cur : Math.max(0, cur - 1)
+        while (skipped.has(cur) && cur > 0) cur--
+        if (skipped.has(cur)) return
       } else {
         cur = Math.max(0, Math.min(nSegs - 1, cur + 1))
-        if (cur === p.active_segment) return
+        while (skipped.has(cur) && cur < nSegs - 1) cur++
+        if (skipped.has(cur) || cur === p.active_segment) return
       }
       const bounds = getSegmentBounds(p.markers, total, cur)
       if (!bounds) return

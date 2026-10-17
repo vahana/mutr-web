@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { engine } from '../audio/engine'
-import { getSegmentBounds, nearestMarker, segmentAt, snapToSecond, SNAP_MS } from '../lib/segments'
+import {
+  getSegmentBounds,
+  nearestMarker,
+  remapSkipsOnAdd,
+  remapSkipsOnRemove,
+  segmentAt,
+  snapToSecond,
+  SNAP_MS,
+} from '../lib/segments'
 import { useProjectStore } from '../store/useProjectStore'
 
 const BAR_H = 20
@@ -38,6 +46,7 @@ export function LoopBar() {
   const markers = project?.markers ?? []
   const activeSegment = project?.active_segment ?? -1
   const loopEnabled = project?.loop_enabled ?? false
+  const skipped = project?.skipped_segments ?? []
 
   useEffect(() => engine.subscribe(() => setTick((t) => t + 1)), [])
 
@@ -71,6 +80,23 @@ export function LoopBar() {
         const x1 = x(all[i + 1])
         ctx.fillStyle = i === activeSegment ? active : inactive
         ctx.fillRect(x0 + 1, 1, x1 - x0 - 1, BAR_H - 2)
+        if (skipped.includes(i)) {
+          ctx.fillStyle = 'rgba(0,0,0,0.6)'
+          ctx.fillRect(x0 + 1, 1, x1 - x0 - 1, BAR_H - 2)
+          ctx.save()
+          ctx.beginPath()
+          ctx.rect(x0 + 1, 1, x1 - x0 - 1, BAR_H - 2)
+          ctx.clip()
+          ctx.strokeStyle = 'rgba(200,200,200,0.35)'
+          ctx.lineWidth = 1
+          for (let hx = x0 - BAR_H; hx < x1; hx += 6) {
+            ctx.beginPath()
+            ctx.moveTo(hx, BAR_H)
+            ctx.lineTo(hx + BAR_H, 0)
+            ctx.stroke()
+          }
+          ctx.restore()
+        }
       }
       if (!loopEnabled) {
         ctx.fillStyle = 'rgba(0,0,0,0.45)'
@@ -134,7 +160,7 @@ export function LoopBar() {
       cancelAnimationFrame(raf)
       ro.disconnect()
     }
-  }, [markers, activeSegment, loopEnabled, sticky, setProject, save])
+  }, [markers, activeSegment, loopEnabled, skipped, sticky, setProject, save])
 
   const xToMs = (clientX: number) => {
     const canvas = canvasRef.current
@@ -155,8 +181,13 @@ export function LoopBar() {
     return nearestMarker(markers, xToMs(clientX), radiusMs)
   }
 
-  const updateMarkers = (next: number[]) => {
-    setProject((p) => ({ ...p, markers: next, active_segment: Math.min(p.active_segment, next.length) }))
+  const updateMarkers = (next: number[], nextSkipped: number[]) => {
+    setProject((p) => ({
+      ...p,
+      markers: next,
+      skipped_segments: nextSkipped,
+      active_segment: Math.min(p.active_segment, next.length),
+    }))
     void save()
   }
 
@@ -193,12 +224,19 @@ export function LoopBar() {
     if (total <= 0) return
     const i = markerAt(e.clientX)
     if (i !== null) {
-      updateMarkers(markers.filter((_, idx) => idx !== i))
+      updateMarkers(
+        markers.filter((_, idx) => idx !== i),
+        remapSkipsOnRemove(skipped, i),
+      )
       return
     }
     const ms = snapToSecond(xToMs(e.clientX))
     if (ms === 0 || ms >= total || markers.includes(ms)) return
-    updateMarkers([...markers, ms].sort((a, b) => a - b))
+    const segIdx = markers.filter((m) => m < ms).length
+    updateMarkers(
+      [...markers, ms].sort((a, b) => a - b),
+      remapSkipsOnAdd(skipped, segIdx),
+    )
   }
 
   const moveMarker = (i: number, clientX: number) => {

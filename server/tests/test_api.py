@@ -68,6 +68,35 @@ def test_update_clamps(client):
     assert client.get(f"/api/projects/{name}").json()["markers"] == [1000.0, 5000.0]
 
 
+def test_skipped_segments_default_empty(client):
+    name = _project(client)
+    assert client.get(f"/api/projects/{name}").json()["skipped_segments"] == []
+
+
+def test_skipped_segments_sanitized_and_persisted(client):
+    name = _project(client)
+    r = client.put(f"/api/projects/{name}", json={
+        "markers": [5000.0, 1000.0], "skipped_segments": [2, 0, 2, -1, 3, 99],
+    })
+    assert r.status_code == 200
+    assert r.json()["project"]["skipped_segments"] == [0, 2]
+    assert client.get(f"/api/projects/{name}").json()["skipped_segments"] == [0, 2]
+
+
+def test_skipped_segments_dropped_when_markers_removed(client):
+    name = _project(client)
+    client.put(f"/api/projects/{name}", json={"markers": [1000.0], "skipped_segments": [1]})
+    r = client.put(f"/api/projects/{name}", json={"markers": [], "skipped_segments": [1]})
+    assert r.json()["project"]["skipped_segments"] == []
+
+
+def test_skipped_segments_kept_when_omitted(client):
+    name = _project(client)
+    client.put(f"/api/projects/{name}", json={"markers": [1000.0], "skipped_segments": [0]})
+    r = client.put(f"/api/projects/{name}", json={"markers": [1000.0], "speed": 80})
+    assert r.json()["project"]["skipped_segments"] == [0]
+
+
 def test_update_ignores_incoming_tracks(client):
     name = _project(client)
     client.app.state.storage.add_tracks(name, ["a.mp3", "b.mp3"])

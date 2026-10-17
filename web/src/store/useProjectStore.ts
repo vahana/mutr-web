@@ -2,6 +2,7 @@ import { create } from 'zustand'
 
 import { api, errMsg } from '../api/client'
 import type { Project, ProjectInfo, Track, Waveform } from '../api/types'
+import { toggleSkip } from '../lib/segments'
 import { pushToast } from './useToastStore'
 
 export const ALLOWED_EXTS = new Set([
@@ -38,6 +39,7 @@ interface ProjectStore {
   toggleSelect: (idx: number) => void
   clearSelection: () => void
   reorder: (from: number, to: number) => Promise<void>
+  toggleSkipActive: () => void
 }
 
 export const useProjectStore = create<ProjectStore>((set, get) => ({
@@ -217,6 +219,14 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     set({ selection: next })
   },
   clearSelection: () => set({ selection: [] }),
+
+  toggleSkipActive: () => {
+    const { project } = get()
+    if (!project || project.active_segment < 0) return
+    const skipped_segments = toggleSkip(project.skipped_segments, project.active_segment)
+    set({ project: { ...project, skipped_segments } })
+    void get().save()
+  },
 
   reorder: async (from, to) => {
     const { project, projectName, selection } = get()

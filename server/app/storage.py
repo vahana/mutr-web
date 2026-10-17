@@ -39,10 +39,24 @@ def _with_colors(data: dict) -> dict:
     return data
 
 
+def _with_defaults(data: dict) -> dict:
+    data.setdefault("skipped_segments", [])
+    return data
+
+
+def _clean_skips(raw, segment_count: int) -> list[int]:
+    out = set()
+    for v in raw or []:
+        i = int(v)
+        if 0 <= i < segment_count:
+            out.add(i)
+    return sorted(out)
+
+
 _EMPTY_PROJECT = {
     "version": 1, "tracks": [], "markers": [], "active_segment": -1,
     "loop_enabled": False, "speed": 100, "master_volume": 80,
-    "position_ms": 0.0, "expanded_video_track": -1,
+    "position_ms": 0.0, "expanded_video_track": -1, "skipped_segments": [],
 }
 
 
@@ -105,13 +119,15 @@ class Storage:
     def get_project(self, name: str) -> dict:
         d, f = self.require(name)
         data = load_project(f)
-        return _with_colors(_relativize(data, d))
+        return _with_colors(_relativize(_with_defaults(data), d))
 
     def update_project(self, name: str, data: dict) -> dict:
         d, f = self.require(name)
         with self.lock(name):
             out = load_project(f)
             out["markers"] = sorted(float(m) for m in data.get("markers", []))
+            skips = data["skipped_segments"] if "skipped_segments" in data else out.get("skipped_segments", [])
+            out["skipped_segments"] = _clean_skips(skips, len(out["markers"]) + 1)
             out["active_segment"] = int(data.get("active_segment", out.get("active_segment", -1)))
             out["loop_enabled"] = bool(data.get("loop_enabled", out.get("loop_enabled", False)))
             speed = data.get("speed")

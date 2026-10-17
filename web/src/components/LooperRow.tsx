@@ -3,6 +3,9 @@ import { LoopBar } from './LoopBar'
 
 export function LooperRow() {
   const loopEnabled = useProjectStore((s) => s.project?.loop_enabled ?? false)
+  const activeSegment = useProjectStore((s) => s.project?.active_segment ?? -1)
+  const activeSkipped = useProjectStore((s) => s.project?.skipped_segments.includes(activeSegment) ?? false)
+  const toggleSkipActive = useProjectStore((s) => s.toggleSkipActive)
   const setProject = useProjectStore((s) => s.setProject)
   const save = useProjectStore((s) => s.save)
 
@@ -25,6 +28,14 @@ export function LooperRow() {
           }}
         >
           🔁
+        </button>
+        <button
+          className={`mini-btn ${activeSkipped ? 'on-loop' : ''}`}
+          title="Skip selected segment (X)"
+          disabled={activeSegment < 0}
+          onClick={toggleSkipActive}
+        >
+          ⏭
         </button>
       </div>
     </div>

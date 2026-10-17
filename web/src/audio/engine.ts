@@ -1,6 +1,6 @@
 import { api } from '../api/client'
 import type { Track } from '../api/types'
-import { getSegmentBounds } from '../lib/segments'
+import { getSegmentBounds, skipEndAt } from '../lib/segments'
 
 const VIDEO_EXTS = new Set(['.mp4', '.mkv', '.mov', '.avi', '.webm'])
 
@@ -25,6 +25,7 @@ export class AudioEngine {
   private markers: number[] = []
   private activeSegment = -1
   private loopEnabled = false
+  private skipped: number[] = []
   private listeners = new Set<Listener>()
   private raf = 0
   private lastRafPos = 0
@@ -135,6 +136,8 @@ export class AudioEngine {
 
   async play() {
     if (!this.master || this._playing || this.elements.length === 0) return
+    const target = this.skipTarget(this._positionMs)
+    if (target !== null) this.seekAll(target >= this._durationMs ? 0 : target)
     const pos = this._positionMs / 1000
     this.elements.forEach((el, i) => this.trySeek(el, i, pos))
     this._playing = true
@@ -246,10 +249,27 @@ export class AudioEngine {
     }
   }
 
-  setLoop(markers: number[], activeSegment: number, loopEnabled: boolean) {
+  setLoop(markers: number[], activeSegment: number, loopEnabled: boolean, skipped: number[]) {
     this.markers = markers
     this.activeSegment = activeSegment
     this.loopEnabled = loopEnabled
+    this.skipped = skipped
+  }
+
+  private skipTarget(posMs: number): number | null {
+    if (this.skipped.length === 0 || this._durationMs <= 0) return null
+    if (this.loopEnabled) {
+      const bounds = getSegmentBounds(this.markers, this._durationMs, this.activeSegment)
+      if (bounds && posMs >= bounds[0] && posMs < bounds[1]) return null
+    }
+    return skipEndAt(this.markers, this._durationMs, this.skipped, posMs)
+  }
+
+  private applySkip() {
+    const target = this.skipTarget(this._positionMs)
+    if (target === null) return
+    if (target >= this._durationMs) this.stop()
+    else this.seekAll(target)
   }
 
   private syncPosition() {
@@ -342,6 +362,7 @@ export class AudioEngine {
         this.seekAll(bounds[0])
       }
     }
+    if (this._playing) this.applySkip()
     if (now - this.lastDriftCheck >= 1000) {
       this.lastDriftCheck = now
       this.snapDrift()
