@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>wave test</title>
+<style>
+body { background: #0b0e14; color: #e5e7eb; font-family: -apple-system, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; }
+canvas { width: 100%; height: 120px; background: #0d1119; border: 1px solid #232b3e; border-radius: 8px; display: block; margin: 14px 0; }
+.btn { background: #151b2a; border: 1px solid #27334d; color: #e5e7eb; border-radius: 9px; padding: 10px 18px; font-size: 15px; cursor: pointer; }
+.info { color: #7c8698; font-size: 13px; margin: 8px 0; font-family: monospace; }
+label { color: #94a3b8; }
+</style>
+</head>
+<body>
+<h2>wave test</h2>
+<p class="info">canvas 1: fillRect bars &nbsp;|&nbsp; canvas 2: raw ImageData pixels — same peaks</p>
+<input type="file" accept="audio/*" id="fileInput">
+<button class="btn" id="playBtn">play</button>
+<span class="info" id="time"></span>
+<p class="info" id="stats"></p>
+<canvas id="c1"></canvas>
+<canvas id="c2"></canvas>
+<script>
+const PEAKS_N = 1000;
+let peaks = null, SONG = 0;
+let buffer = null;
+let actx = null, src = null, offset = 0, startCtx = 0, playing = false;
+
+function computePeaks(buffer) {
+  const nch = buffer.numberOfChannels;
+  const len = buffer.length;
+  const per = len / PEAKS_N;
+  const out = new Float32Array(PEAKS_N);
+  for (let i = 0; i < PEAKS_N; i++) {
+    const start = Math.floor(i * per);
+    const end = Math.min(len, Math.ceil((i + 1) * per));
+    let max = 0;
+    for (let c = 0; c < nch; c++) {
+      const ch = buffer.getChannelData(c);
+      for (let j = start; j < end; j++) {
+        const v = Math.abs(ch[j]);
+        if (v > max) max = v;
+      }
+    }
+    out[i] = max;
+  }
+  return out;
+}
+
+function draw1(c, t) {
+  const rect = c.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  c.width = Math.round(rect.width * dpr);
+  c.height = Math.round(rect.height * dpr);
+  const g = c.getContext('2d');
+  g.fillStyle = '#fde047';
+  const W = rect.width, H = rect.height;
+  const Wd = c.width, Hd = c.height;
+  const barW = Math.max(1, Math.ceil(Wd / PEAKS_N));
+  for (let i = 0; i < PEAKS_N; i++) {
+    const p = peaks[i];
+    const h = Math.min(H - 6, Math.max(1.5, p * (H - 6) * 1.4));
+    g.fillRect(Math.floor(i / PEAKS_N * Wd), Math.floor((H - h) / 2 * dpr), barW, Math.max(1, Math.ceil(h * dpr)));
+  }
+  if (t != null) {
+    g.fillStyle = '#ffffff';
+    g.fillRect(Math.floor(t / SONG * Wd), 0, 2 * dpr, Hd);
+  }
+}
+
+function draw2(c, t) {
+  const rect = c.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  c.width = Math.round(rect.width * dpr);
+  c.height = Math.round(rect.height * dpr);
+  const Wd = c.width, Hd = c.height;
+  const img = new ImageData(Wd, Hd);
+  const data = img.data;
+  const H = rect.height;
+  const barW = Math.max(1, Math.ceil(Wd / PEAKS_N));
+  for (let i = 0; i < PEAKS_N; i++) {
+    const p = peaks[i];
+    const h = Math.min(H - 6, Math.max(1.5, p * (H - 6) * 1.4)) * dpr;
+    const x = Math.floor(i / PEAKS_N * Wd);
+    const y0 = Math.floor((Hd - h) / 2);
+    const y1 = Math.floor((Hd + h) / 2);
+    for (let x2 = x; x2 < Math.min(Wd, x + barW); x2++) {
+      for (let y = y0; y < y1; y++) {
+        const k = (y * Wd + x2) * 4;
+        data[k] = 253; data[k + 1] = 224; data[k + 2] = 71; data[k + 3] = 255;
+      }
+    }
+  }
+  if (t != null) {
+    const px = Math.floor(t / SONG * Wd);
+    for (let y = 0; y < Hd; y++) {
+      for (let x2 = px; x2 < Math.min(Wd, px + Math.max(1, 2 * dpr)); x2++) {
+        const k = (y * Wd + x2) * 4;
+        data[k] = 255; data[k + 1] = 255; data[k + 2] = 255; data[k + 3] = 255;
+      }
+    }
+  }
+  c.getContext('2d').putImageData(img, 0, 0);
+}
+
+function stats() {
+  const b = t => Math.min(PEAKS_N - 1, Math.max(0, Math.floor(t / SONG * PEAKS_N)));
+  let mn = 1, mx = 0, silent = 0;
+  for (let i = 0; i < PEAKS_N; i++) {
+    mn = Math.min(mn, peaks[i]);
+    mx = Math.max(mx, peaks[i]);
+    if (peaks[i] < 0.01) silent++;
+  }
+  let mn2 = 1, mx2 = 0;
+  for (let i = b(85); i <= b(90); i++) {
+    mn2 = Math.min(mn2, peaks[i]);
+    mx2 = Math.max(mx2, peaks[i]);
+  }
+  document.getElementById('stats').textContent =
+    'song ' + SONG.toFixed(1) + 's | overall min ' + mn.toFixed(3) + ' max ' + mx.toFixed(3) +
+    ' | silent buckets ' + silent + ' | 85-90s min ' + mn2.toFixed(3) + ' max ' + mx2.toFixed(3);
+}
+
+async function load(file) {
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    const ab = await file.arrayBuffer();
+    const buf = await new Promise((res, rej) => {
+      const ok = x => res(x), err = e => rej(e);
+      let p;
+      try { p = actx.decodeAudioData(ab, ok, err); } catch (e) { return err(e); }
+      if (p && typeof p.then === 'function') p.then(ok, err);
+    });
+    playing = false;
+    if (src) { try { src.stop(); } catch (e) {} src = null; }
+    buffer = buf;
+    SONG = buf.duration;
+    offset = 0;
+    peaks = computePeaks(buf);
+    stats();
+  } catch (e) {
+    document.getElementById('stats').textContent = 'load error: ' + e.message;
+  }
+}
+
+function currentT() {
+  return playing ? offset + (actx.currentTime - startCtx) : offset;
+}
+
+function togglePlay() {
+  if (!buffer) return;
+  if (actx.state === 'suspended') actx.resume();
+  if (playing) {
+    playing = false;
+    offset = currentT();
+    try { src.stop(); } catch (e) {}
+    src = null;
+    document.getElementById('playBtn').textContent = 'play';
+    return;
+  }
+  if (offset >= SONG - 0.01) offset = 0;
+  src = actx.createBufferSource();
+  src.buffer = buffer;
+  src.connect(actx.destination);
+  src.start(0, offset);
+  startCtx = actx.currentTime;
+  playing = true;
+  document.getElementById('playBtn').textContent = 'pause';
+}
+
+document.getElementById('playBtn').addEventListener('click', togglePlay);
+
+function seekCanvas(c) {
+  c.addEventListener('click', e => {
+    if (!buffer) return;
+    const r = c.getBoundingClientRect();
+    const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    offset = x * SONG;
+    if (playing) {
+      try { src.stop(); } catch (e2) {}
+      src = actx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(actx.destination);
+      src.start(0, offset);
+      startCtx = actx.currentTime;
+    }
+  });
+}
+seekCanvas(document.getElementById('c1'));
+seekCanvas(document.getElementById('c2'));
+
+function frame() {
+  if (buffer) {
+    if (playing && currentT() >= SONG) {
+      playing = false;
+      offset = 0;
+      try { src.stop(); } catch (e) {}
+      document.getElementById('playBtn').textContent = 'play';
+    }
+    const t = currentT();
+    document.getElementById('time').textContent = t.toFixed(1) + 's / ' + SONG.toFixed(1) + 's';
+    draw1(document.getElementById('c1'), t);
+    draw2(document.getElementById('c2'), t);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+document.getElementById('fileInput').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) load(f);
+});
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => {
+  e.preventDefault();
+  const f = e.dataTransfer.files[0];
+  if (f) load(f);
+});
+</script>
+</body>
+</html>

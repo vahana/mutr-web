@@ -2,7 +2,7 @@ import asyncio
 from pathlib import Path
 
 import aiofiles
-from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
@@ -137,7 +137,7 @@ async def media(name: str, filename: str, request: Request):
 
 
 @router.post("/projects/{name}/tracks/merge")
-def merge_tracks_endpoint(name: str, body: MergeBody, request: Request, background_tasks: BackgroundTasks):
+async def merge_tracks_endpoint(name: str, body: MergeBody, request: Request):
     storage = request.app.state.storage
     indices = sorted(set(body.indices))
     if len(indices) < 2:
@@ -149,7 +149,7 @@ def merge_tracks_endpoint(name: str, body: MergeBody, request: Request, backgrou
         raise HTTPException(404, str(e))
     track0 = storage.track(name, indices[0])
     job = request.app.state.job_manager.create("merge", name, indices[0], track0["file"])
-    background_tasks.add_task(run_job, request.app, job, {"indices": indices})
+    asyncio.create_task(run_job(request.app, job, {"indices": indices}))
     return {"job_id": job.id}
 
 
@@ -188,7 +188,7 @@ async def waveform(name: str, idx: int, request: Request):
 
 
 @router.post("/projects/{name}/tracks/{idx}/pitch")
-def pitch_track(name: str, idx: int, body: PitchBody, request: Request, background_tasks: BackgroundTasks):
+async def pitch_track(name: str, idx: int, body: PitchBody, request: Request):
     storage = request.app.state.storage
     try:
         track = storage.track(name, idx)
@@ -197,12 +197,12 @@ def pitch_track(name: str, idx: int, body: PitchBody, request: Request, backgrou
     if body.semitones == 0 or not -12 <= body.semitones <= 12:
         raise HTTPException(400, "semitones must be within ±12 and non-zero")
     job = request.app.state.job_manager.create("pitch", name, idx, track["file"])
-    background_tasks.add_task(run_job, request.app, job, {"semitones": body.semitones})
+    asyncio.create_task(run_job(request.app, job, {"semitones": body.semitones}))
     return {"job_id": job.id}
 
 
 @router.post("/projects/{name}/tracks/{idx}/stems")
-def stems_track(name: str, idx: int, body: StemsBody, request: Request, background_tasks: BackgroundTasks):
+async def stems_track(name: str, idx: int, body: StemsBody, request: Request):
     storage = request.app.state.storage
     try:
         track = storage.track(name, idx)
@@ -215,12 +215,12 @@ def stems_track(name: str, idx: int, body: StemsBody, request: Request, backgrou
     if not 0 <= shifts <= 20:
         raise HTTPException(400, "shifts must be 0-20")
     job = request.app.state.job_manager.create("stems", name, idx, track["file"])
-    background_tasks.add_task(run_job, request.app, job, {"model": model, "shifts": shifts})
+    asyncio.create_task(run_job(request.app, job, {"model": model, "shifts": shifts}))
     return {"job_id": job.id}
 
 
 @router.post("/projects/{name}/tracks/ytdl")
-def ytdl_track(name: str, body: YtdlBody, request: Request, background_tasks: BackgroundTasks):
+async def ytdl_track(name: str, body: YtdlBody, request: Request):
     storage = request.app.state.storage
     try:
         storage.require(name)
@@ -231,9 +231,9 @@ def ytdl_track(name: str, body: YtdlBody, request: Request, background_tasks: Ba
     if body.container not in ("mkv", "mp4"):
         raise HTTPException(400, "container must be mkv or mp4")
     job = request.app.state.job_manager.create("ytdl", name, -1, "")
-    background_tasks.add_task(
-        run_job, request.app, job,
+    asyncio.create_task(run_job(
+        request.app, job,
         {"url": body.url, "quality": body.quality, "audio_only": body.audio_only,
          "container": body.container},
-    )
+    ))
     return {"job_id": job.id}

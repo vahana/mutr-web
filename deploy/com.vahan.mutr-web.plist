@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.vahan.mutr-web</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/vahan/mutr-web/server/mutr-web-server.sh</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/vahan/mutr-web/server</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/vahan/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>/Users/vahan</string>
+        <key>LANG</key>
+        <string>en_US.UTF-8</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+        <key>Crashed</key>
+        <true/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>3</integer>
+    <key>ProcessType</key>
+    <string>Interactive</string>
+    <key>StandardOutPath</key>
+    <string>/Users/vahan/mutr-web/logs/uvicorn.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/vahan/mutr-web/logs/uvicorn.log</string>
+</dict>
+</plist>

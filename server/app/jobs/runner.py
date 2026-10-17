@@ -1,4 +1,6 @@
 import asyncio
+import contextlib
+import shutil
 
 from mutr_core.media import is_video
 from mutr_core.merge import merge_tracks
@@ -10,7 +12,25 @@ from mutr_core.stems import (
 )
 from mutr_core.ytdl import download, parse_ytdlp_progress
 
-_stems_sem = asyncio.Semaphore(2)
+
+@contextlib.asynccontextmanager
+async def _acquire(sem, job, manager, message):
+    if sem.locked():
+        manager.emit(job, "waiting", message=message)
+    acquired = False
+    try:
+        while not acquired:
+            if manager.cancel_event(job.id).is_set():
+                raise CancelledError()
+            try:
+                await asyncio.wait_for(sem.acquire(), timeout=0.5)
+                acquired = True
+            except asyncio.TimeoutError:
+                continue
+        yield
+    finally:
+        if acquired:
+            sem.release()
 
 
 def _emit_progress(manager, job, line, parse=None):
@@ -70,6 +90,9 @@ def _ytdl_job(app, job, params):
     manager = app.state.job_manager
     cancel = manager.cancel_event(job.id)
     base, _ = storage.require(job.project)
+    free_gb = shutil.disk_usage(base).free / (1024**3)
+    if free_gb < 2:
+        raise RuntimeError(f"not enough free disk space: {free_gb:.1f} GB free (2 GB required)")
     path = download(
         params["url"], base,
         quality=params["quality"], audio_only=params["audio_only"],
@@ -125,19 +148,29 @@ async def _apply_result(app, job, result):
     manager.emit(job, "done", added_tracks=added, waveforms=waveforms)
 
 
-async def run_job(app, job, params):
+async def _run_guarded(app, job, params):
     manager = app.state.job_manager
     manager.set_status(job, "running")
+    loop = asyncio.get_running_loop()
+    if job.kind == "stems":
+        return await loop.run_in_executor(app.state.job_executor, _stems_job, app, job, params)
+    if job.kind == "ytdl":
+        return await loop.run_in_executor(app.state.job_executor, _ytdl_job, app, job, params)
+    if job.kind == "merge":
+        return await loop.run_in_executor(app.state.job_executor, _merge_job, app, job, params)
+    return await loop.run_in_executor(app.state.job_executor, _pitch_job, app, job, params)
+
+
+async def run_job(app, job, params):
+    manager = app.state.job_manager
     try:
         if job.kind == "stems":
-            async with _stems_sem:
-                result = await asyncio.to_thread(_stems_job, app, job, params)
-        elif job.kind == "ytdl":
-            result = await asyncio.to_thread(_ytdl_job, app, job, params)
-        elif job.kind == "merge":
-            result = await asyncio.to_thread(_merge_job, app, job, params)
+            async with _acquire(app.state.stems_slot, job, manager, "waiting for the stem-split slot…"):
+                async with _acquire(app.state.job_slots, job, manager, "waiting for a free slot…"):
+                    result = await _run_guarded(app, job, params)
         else:
-            result = await asyncio.to_thread(_pitch_job, app, job, params)
+            async with _acquire(app.state.job_slots, job, manager, "waiting for a free slot…"):
+                result = await _run_guarded(app, job, params)
     except CancelledError:
         manager.set_status(job, "cancelled")
         manager.emit(job, "cancelled", message="cancelled")

@@ -66,6 +66,10 @@ class JobManager:
             jobs = list(self._jobs.values())
         return [to_dict(j) for j in jobs]
 
+    def active_ids(self) -> list[str]:
+        with self._lock:
+            return [j.id for j in self._jobs.values() if j.status not in TERMINAL]
+
     def cancel_event(self, job_id: str) -> threading.Event | None:
         with self._lock:
             return self._cancel_events.get(job_id)

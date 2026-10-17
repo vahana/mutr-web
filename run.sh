@@ -23,7 +23,7 @@ start_uvicorn() {
         return
     fi
     mkdir -p "$LOGS"
-    (cd "$ROOT/server" && nohup uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 ${1:-} </dev/null >> "$LOGS/uvicorn.log" 2>&1 &)
+    (cd "$ROOT/server" && nohup caffeinate -s uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 ${1:-} </dev/null >> "$LOGS/uvicorn.log" 2>&1 &)
     for _ in $(seq 1 30); do
         curl -sf http://localhost:8000/api/health >/dev/null 2>&1 && {
             say "backend up: http://localhost:8000  (log: logs/uvicorn.log)"

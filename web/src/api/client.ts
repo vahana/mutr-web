@@ -1,6 +1,8 @@
 import type { Job, Project, ProjectInfo, Track, Waveform } from './types'
 
 const BASE = '/api'
+const DEFAULT_TIMEOUT = 15_000
+const UPLOAD_TIMEOUT = 300_000
 
 export class ApiError extends Error {
   status: number
@@ -33,6 +35,37 @@ async function handle<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>
 }
 
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  timeoutMs = DEFAULT_TIMEOUT,
+): Promise<T> {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  try {
+    let res: Response
+    try {
+      res = await fetch(`${BASE}${path}`, { ...init, signal: ctrl.signal })
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') throw new ApiError(0, 'request timed out')
+      throw new ApiError(0, 'cannot reach server')
+    }
+    return await handle<T>(res)
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function requestRaw(path: string, init: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT): Promise<Response> {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  try {
+    return await fetch(`${BASE}${path}`, { ...init, signal: ctrl.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 const json = (method: string, body?: unknown): RequestInit => ({
   method,
   headers: { 'Content-Type': 'application/json' },
@@ -40,98 +73,99 @@ const json = (method: string, body?: unknown): RequestInit => ({
 })
 
 export const api = {
-  listProjects: () => fetch(`${BASE}/projects`).then(handle<ProjectInfo[]>),
+  health: () => request<Record<string, unknown>>('/health', {}, 3000),
+
+  listProjects: () => request<ProjectInfo[]>('/projects'),
 
   createProject: (name?: string) =>
-    fetch(`${BASE}/projects`, json('POST', { name: name ?? null })).then(
-      handle<{ name: string; project: Project }>,
-    ),
+    request<{ name: string; project: Project }>('/projects', json('POST', { name: name ?? null })),
 
   getProject: (name: string) =>
-    fetch(`${BASE}/projects/${encodeURIComponent(name)}`).then(handle<Project>),
+    request<Project>(`/projects/${encodeURIComponent(name)}`),
 
   updateProject: (name: string, project: Project) =>
-    fetch(`${BASE}/projects/${encodeURIComponent(name)}`, json('PUT', project)).then(
-      handle<{ saved: boolean; project: Project }>,
+    request<{ saved: boolean; project: Project }>(
+      `/projects/${encodeURIComponent(name)}`,
+      json('PUT', project),
     ),
 
   deleteProject: (name: string, deleteFiles = true) =>
-    fetch(
-      `${BASE}/projects/${encodeURIComponent(name)}?delete_files=${deleteFiles}`,
+    request<void>(
+      `/projects/${encodeURIComponent(name)}?delete_files=${deleteFiles}`,
       { method: 'DELETE' },
-    ).then(handle<void>),
+    ),
 
   renameProject: (name: string, newName: string) =>
-    fetch(`${BASE}/projects/${encodeURIComponent(name)}/rename`, json('POST', { new_name: newName })).then(
-      handle<{ name: string }>,
+    request<{ name: string }>(
+      `/projects/${encodeURIComponent(name)}/rename`,
+      json('POST', { new_name: newName }),
     ),
 
   exportProject: (name: string) =>
-    fetch(`${BASE}/projects/${encodeURIComponent(name)}/export`),
+    requestRaw(`/projects/${encodeURIComponent(name)}/export`),
 
   uploadTracks: (name: string, files: File[]) => {
     const fd = new FormData()
     for (const f of files) fd.append('files', f, f.name)
-    return fetch(`${BASE}/projects/${encodeURIComponent(name)}/tracks/upload`, {
-      method: 'POST',
-      body: fd,
-    }).then(handle<{ tracks: Track[]; waveforms: Record<string, Waveform> }>)
+    return request<{ tracks: Track[]; waveforms: Record<string, Waveform> }>(
+      `/projects/${encodeURIComponent(name)}/tracks/upload`,
+      { method: 'POST', body: fd },
+      UPLOAD_TIMEOUT,
+    )
   },
 
   patchTrack: (name: string, idx: number, patch: Partial<Track>) =>
-    fetch(`${BASE}/projects/${encodeURIComponent(name)}/tracks/${idx}`, json('PATCH', patch)).then(
-      handle<Track>,
-    ),
+    request<Track>(`/projects/${encodeURIComponent(name)}/tracks/${idx}`, json('PATCH', patch)),
 
   deleteTrack: (name: string, idx: number, deleteFile: boolean) =>
-    fetch(
-      `${BASE}/projects/${encodeURIComponent(name)}/tracks/${idx}`,
+    request<void>(
+      `/projects/${encodeURIComponent(name)}/tracks/${idx}`,
       json('DELETE', { delete_file: deleteFile }),
-    ).then(handle<void>),
+    ),
 
   pitchTrack: (name: string, idx: number, semitones: number) =>
-    fetch(
-      `${BASE}/projects/${encodeURIComponent(name)}/tracks/${idx}/pitch`,
+    request<{ job_id: string }>(
+      `/projects/${encodeURIComponent(name)}/tracks/${idx}/pitch`,
       json('POST', { semitones }),
-    ).then(handle<{ job_id: string }>),
+    ),
 
   stemsTrack: (name: string, idx: number, model: string, shifts: number) =>
-    fetch(
-      `${BASE}/projects/${encodeURIComponent(name)}/tracks/${idx}/stems`,
+    request<{ job_id: string }>(
+      `/projects/${encodeURIComponent(name)}/tracks/${idx}/stems`,
       json('POST', { model, shifts }),
-    ).then(handle<{ job_id: string }>),
+    ),
 
   ytdlTrack: (name: string, url: string, quality: number, audioOnly: boolean) =>
-    fetch(
-      `${BASE}/projects/${encodeURIComponent(name)}/tracks/ytdl`,
+    request<{ job_id: string }>(
+      `/projects/${encodeURIComponent(name)}/tracks/ytdl`,
       json('POST', { url, quality, audio_only: audioOnly }),
-    ).then(handle<{ job_id: string }>),
+    ),
 
   getWaveform: (name: string, idx: number) =>
-    fetch(`${BASE}/projects/${encodeURIComponent(name)}/waveforms/${idx}`).then(handle<Waveform>),
+    request<Waveform>(`/projects/${encodeURIComponent(name)}/waveforms/${idx}`),
 
   mergeTracks: (name: string, indices: number[]) =>
-    fetch(
-      `${BASE}/projects/${encodeURIComponent(name)}/tracks/merge`,
+    request<{ job_id: string }>(
+      `/projects/${encodeURIComponent(name)}/tracks/merge`,
       json('POST', { indices }),
-    ).then(handle<{ job_id: string }>),
+    ),
 
   deleteTracks: (name: string, indices: number[], deleteFiles: boolean) =>
-    fetch(
-      `${BASE}/projects/${encodeURIComponent(name)}/tracks/delete`,
+    request<void>(
+      `/projects/${encodeURIComponent(name)}/tracks/delete`,
       json('POST', { indices, delete_files: deleteFiles }),
-    ).then(handle<void>),
+    ),
 
   reorderTracks: (name: string, fromIndex: number, toIndex: number) =>
-    fetch(
-      `${BASE}/projects/${encodeURIComponent(name)}/tracks/reorder`,
+    request<void>(
+      `/projects/${encodeURIComponent(name)}/tracks/reorder`,
       json('POST', { from_index: fromIndex, to_index: toIndex }),
-    ).then(handle<void>),
+    ),
 
-  getJob: (jobId: string) => fetch(`${BASE}/jobs/${jobId}`).then(handle<Job>),
+  getJob: (jobId: string) => request<Job>(`/jobs/${jobId}`),
 
   cancelJob: (jobId: string) =>
-    fetch(`${BASE}/jobs/${jobId}/cancel`, { method: 'POST' }).then(handle<void>),
+    request<void>(`/jobs/${jobId}/cancel`, { method: 'POST' }),
 
   mediaUrl: (name: string, filename: string) =>
     `/media/${encodeURIComponent(name)}/${encodeURIComponent(filename)}`,

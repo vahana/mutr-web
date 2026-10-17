@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-import { api, errMsg } from '../api/client'
+import { api, ApiError, errMsg } from '../api/client'
 import type { Job, JobKind } from '../api/types'
 import { useProjectStore } from './useProjectStore'
 import { pushToast } from './useToastStore'
@@ -15,7 +15,16 @@ interface JobsStore {
   closeSource: (jobId: string) => void
 }
 
+interface Conn {
+  ended: boolean
+  healthTimer: number | null
+}
+
 const TERMINAL = new Set(['done', 'error', 'cancelled'])
+const MAX_RECONNECT_ERRORS = 10
+const HEALTH_POLL_MS = 5000
+
+const conns = new Map<string, Conn>()
 
 export const useJobsStore = create<JobsStore>((set, get) => ({
   jobs: {},
@@ -34,58 +43,134 @@ export const useJobsStore = create<JobsStore>((set, get) => ({
       message: '',
       error: '',
       added_tracks: [],
-      created_at: Date.now(),
+      created_at: Date.now() / 1000,
     }
     set((s) => ({
       jobs: { ...s.jobs, [jobId]: stub },
       order: s.order.includes(jobId) ? s.order : [jobId, ...s.order],
     }))
-    const source = new EventSource(`/api/jobs/${jobId}/events`)
-    set((s) => ({ sources: { ...s.sources, [jobId]: source } }))
+    const conn: Conn = { ended: false, healthTimer: null }
+    conns.set(jobId, conn)
+    let lastId = 0
+    let errCount = 0
 
     const patch = (p: Partial<Job>) =>
-      set((s) => ({
-        jobs: { ...s.jobs, [jobId]: { ...(s.jobs[jobId] ?? stub), ...p } },
-      }))
+      set((s) => {
+        const job = s.jobs[jobId]
+        if (!job) return s
+        return { jobs: { ...s.jobs, [jobId]: { ...job, ...p } } }
+      })
 
-    source.addEventListener('progress', (e) => {
-      const data = JSON.parse((e as MessageEvent).data) as { progress?: number | null; message?: string }
-      patch({ status: 'running', progress: data.progress ?? null, message: data.message ?? '' })
-    })
-    source.addEventListener('done', (e) => {
-      const data = JSON.parse((e as MessageEvent).data) as { added_tracks?: Job['added_tracks'] }
-      patch({ status: 'done', added_tracks: data.added_tracks ?? [] })
-      pushToast(`${kindLabel(kind)} finished`)
-      const { projectName } = useProjectStore.getState()
-      if (projectName === project) {
-        void useProjectStore.getState().openProject(projectName)
-      }
-      scheduleDismiss(jobId)
-    })
-    source.addEventListener('error', (e) => {
-      const data = JSON.parse((e as MessageEvent).data) as { message?: string }
-      const message = data.message ?? 'unknown error'
-      patch({ status: 'error', error: message })
-      console.error(`[job ${jobId}] ${kind} failed:`, message)
-      pushToast(`${kindLabel(kind)} failed: ${message}`, 'error')
-    })
-    source.addEventListener('cancelled', () => {
-      patch({ status: 'cancelled' })
-      pushToast(`${kindLabel(kind)} cancelled`)
-      scheduleDismiss(jobId)
-    })
-    source.onerror = () => {
-      const job = get().jobs[jobId]
-      if (job && !TERMINAL.has(job.status)) {
-        patch({ status: 'error', error: 'connection lost — job state unknown' })
-        console.error(`[job ${jobId}] SSE connection lost`)
-        pushToast(`Job ${jobId}: lost connection to server`, 'error')
+    const stop = () => {
+      conn.ended = true
+      if (conn.healthTimer !== null) {
+        clearTimeout(conn.healthTimer)
+        conn.healthTimer = null
       }
       get().closeSource(jobId)
     }
+
+    const markLost = () => {
+      stop()
+      patch({ status: 'error', error: 'server restarted — job state unknown' })
+      pushToast(`${kindLabel(kind)} lost: server restarted while it was running`, 'error')
+    }
+
+    const open = () => {
+      if (conn.ended) return
+      const q = lastId > 0 ? `?last_id=${lastId}` : ''
+      const source = new EventSource(`/api/jobs/${jobId}/events${q}`)
+      set((s) => ({ sources: { ...s.sources, [jobId]: source } }))
+      attach(source)
+    }
+
+    const checkJobLost = async () => {
+      try {
+        await api.getJob(jobId)
+        open()
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404) markLost()
+        else pollUntilHealthy()
+      }
+    }
+
+    const pollUntilHealthy = () => {
+      if (conn.ended || conn.healthTimer !== null) return
+      conn.healthTimer = window.setTimeout(() => {
+        conn.healthTimer = null
+        void api.health().then(() => {
+          errCount = 0
+          open()
+        }).catch(() => {
+          pollUntilHealthy()
+        })
+      }, HEALTH_POLL_MS)
+    }
+
+    const attach = (source: EventSource) => {
+      source.addEventListener('waiting', (e) => {
+        const data = JSON.parse((e as MessageEvent).data) as { message?: string }
+        patch({ message: data.message ?? '' })
+      })
+      source.addEventListener('progress', (e) => {
+        lastId = Number((e as MessageEvent).lastEventId) || lastId
+        const data = JSON.parse((e as MessageEvent).data) as { progress?: number | null; message?: string }
+        patch({ status: 'running', progress: data.progress ?? null, message: data.message ?? '' })
+      })
+      source.addEventListener('done', (e) => {
+        lastId = Number((e as MessageEvent).lastEventId) || lastId
+        const data = JSON.parse((e as MessageEvent).data) as { added_tracks?: Job['added_tracks'] }
+        patch({ status: 'done', added_tracks: data.added_tracks ?? [] })
+        pushToast(`${kindLabel(kind)} finished`)
+        const { projectName } = useProjectStore.getState()
+        if (projectName === project) {
+          void useProjectStore.getState().openProject(projectName)
+        }
+        stop()
+        scheduleDismiss(jobId)
+      })
+      source.addEventListener('error', (e) => {
+        lastId = Number((e as MessageEvent).lastEventId) || lastId
+        const data = JSON.parse((e as MessageEvent).data) as { message?: string }
+        const message = data.message ?? 'unknown error'
+        patch({ status: 'error', error: message })
+        console.error(`[job ${jobId}] ${kind} failed:`, message)
+        pushToast(`${kindLabel(kind)} failed: ${message}`, 'error')
+        stop()
+      })
+      source.addEventListener('cancelled', () => {
+        patch({ status: 'cancelled' })
+        pushToast(`${kindLabel(kind)} cancelled`)
+        stop()
+        scheduleDismiss(jobId)
+      })
+      source.onerror = () => {
+        if (conn.ended) return
+        const job = get().jobs[jobId]
+        if (job && TERMINAL.has(job.status)) return
+        errCount++
+        if (source.readyState === EventSource.CLOSED) {
+          void checkJobLost()
+        } else if (errCount >= MAX_RECONNECT_ERRORS) {
+          patch({ message: 'server unreachable — retrying…' })
+          get().closeSource(jobId)
+          pollUntilHealthy()
+        } else if (errCount === 1) {
+          patch({ message: 'connection lost — reconnecting…' })
+        }
+      }
+    }
+
+    open()
   },
 
   dismiss: (jobId) => {
+    const conn = conns.get(jobId)
+    if (conn) {
+      conn.ended = true
+      if (conn.healthTimer !== null) clearTimeout(conn.healthTimer)
+      conns.delete(jobId)
+    }
     get().closeSource(jobId)
     set((s) => ({
       jobs: Object.fromEntries(Object.entries(s.jobs).filter(([k]) => k !== jobId)),

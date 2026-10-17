@@ -42,6 +42,8 @@ async def job_events(job_id: str, request: Request):
     if job is None:
         raise HTTPException(404, "job not found")
     last_id = _parse_last_event_id(request.headers.get("last-event-id"))
+    if last_id == 0:
+        last_id = _parse_last_event_id(request.query_params.get("last_id", "0"))
 
     async def gen():
         nonlocal last_id
