@@ -130,6 +130,16 @@ ss -ltnp | grep ':8000'
 | `:8000` unreachable from LAN | expected — loopback only; use http://localhost:8000 on this host |
 | Stutter over the network | if LAN access is re-enabled, the server's 2.4 GHz WiFi (`wlo1`, AirGo2.4g) is the bottleneck; use Ethernet (`enp44s0`/`enp46s0`) or 5 GHz |
 
+## xdash registration
+
+Registered in xdash at `~/.config/xdash/services.d/mutr-web.yaml`:
+
+- `url: http://localhost:8000`, `port: 8000`
+- `lifecycle.start: ./run.sh`, `lifecycle.stop: ./run.sh stop`, `cwd: /home/vahan/src/mutr-web`
+
+xdash probes the configured port, so if the service port changes, update `port`/`url`
+in that YAML — otherwise it shows as stopped while the app is running.
+
 ## Notes
 
 - `deploy/` and `deploy.sh` still target the old macOS iMac (launchd, `/Users/vahan`,
