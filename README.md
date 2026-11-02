@@ -19,12 +19,14 @@ brew install ffmpeg rubberband yt-dlp
 ## Run
 
 ```bash
-./run.sh          # prod: backend + nginx → http://localhost:8001
+./run.sh          # prod: backend + nginx → http://localhost:8000
 ./run.sh dev      # dev: backend --reload + vite HMR → http://localhost:5173
 ./run.sh stop     # stop everything
 ```
 
 First time only: `./install.sh` (uv sync + npm install + build).
+
+Linux server details (nginx, user-local ffmpeg/rubberband): [docs/prod-setup.md](docs/prod-setup.md).
 
 ## Development (manual)
 
@@ -58,7 +60,7 @@ brew install nginx
 nginx -c "$(pwd)/nginx/nginx.conf" -p "$(pwd)/nginx/"
 ```
 
-- nginx on **:8001**: FE static (`web/dist`), `/media/*` from `server/data/projects/` (native Range), `/api/*` proxied to uvicorn on :8000
+- nginx on **:8000**: FE static (`web/dist`), `/media/*` from `server/data/projects/` (native Range), `/api/*` proxied to uvicorn over a Unix socket
 - `nginx/nginx.conf` contains absolute paths — adjust if the repo moves
 - Stop: `nginx -c ... -p ... -s stop`
 
