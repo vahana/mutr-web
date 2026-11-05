@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export PATH="/usr/local/sbin:/usr/sbin:/sbin:$PATH"
+
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 LOGS="$ROOT/logs"
 SOCK="$ROOT/server/mutr.sock"
