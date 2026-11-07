@@ -17,7 +17,7 @@ stop_all() {
     sleep 0.5
     pkill -9 -f "uvicorn app.main:app" 2>/dev/null || true
     pkill -9 -f "mutr-web/web/node_modules" 2>/dev/null || true
-    nginx -c "$ROOT/nginx/nginx.conf" -p "$ROOT/nginx/" -s stop 2>/dev/null || true
+    stop_nginx
     rm -f "$SOCK"
 }
 
@@ -83,15 +83,44 @@ lan_ip() {
     fi
 }
 
+nginx_running() {
+    local pid
+    pid="$(cat "$ROOT/nginx/logs/nginx.pid" 2>/dev/null)" || return 1
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+
+stop_nginx() {
+    nginx -c "$ROOT/nginx/nginx.conf" -p "$ROOT/nginx/" -s stop 2>/dev/null || true
+    for _ in $(seq 1 20); do
+        nginx_running || break
+        sleep 0.25
+    done
+    if nginx_running; then
+        pkill -9 -f "$ROOT/nginx/nginx.conf" 2>/dev/null || true
+    fi
+    rm -f "$ROOT/nginx/logs/nginx.pid"
+}
+
 start_nginx() {
-    if curl -sf http://localhost:8000/api/health >/dev/null 2>&1; then
+    command -v nginx >/dev/null 2>&1 || die "nginx not installed (sudo apt-get install -y nginx)"
+    if nginx_running; then
         say "nginx already running on :8000"
         return
     fi
-    command -v nginx >/dev/null 2>&1 || die "nginx not installed"
     mkdir -p "$LOGS" "$ROOT/nginx/logs"
-    nginx -c "$ROOT/nginx/nginx.conf" -p "$ROOT/nginx/" </dev/null >> "$LOGS/nginx.log" 2>&1 || die "nginx failed to start"
-    say "nginx up: http://localhost:8000"
+    rm -f "$ROOT/nginx/logs/nginx.pid"
+    nginx -c "$ROOT/nginx/nginx.conf" -p "$ROOT/nginx/" </dev/null >> "$LOGS/nginx.log" 2>&1 || {
+        tail -n 5 "$ROOT/nginx/logs/error.log" 2>/dev/null || true
+        die "nginx failed to start"
+    }
+    for _ in $(seq 1 20); do
+        curl -sf http://127.0.0.1:8000/api/health >/dev/null 2>&1 && {
+            say "nginx up: http://127.0.0.1:8000"
+            return
+        }
+        sleep 0.25
+    done
+    die "nginx started but :8000 health check failed — see nginx/logs/error.log"
 }
 
 case "$MODE" in

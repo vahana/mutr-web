@@ -30,6 +30,7 @@ System packages (apt):
 ```bash
 sudo apt-get update
 sudo apt-get install -y nginx
+sudo systemctl disable --now nginx   # the distro's default instance on :80 is not used
 ```
 
 - Node 20+, `uv`, `yt-dlp` must be on PATH.
@@ -90,6 +91,9 @@ The app is reachable only from this host.
 ## nginx
 
 Config: `nginx/nginx.conf`, run with prefix `nginx/` (relative paths for pid/logs).
+`run.sh` starts and stops it alongside uvicorn (same command, same lifecycle); it is not a
+systemd service. `run.sh` verifies nginx came up via `127.0.0.1:8000/api/health` and exits
+non-zero if it didn't.
 
 Relevant settings:
 
@@ -134,9 +138,9 @@ ss -ltnp | grep ':8000'
 
 - `deploy/` and `deploy.sh` still target the old macOS iMac (launchd, `/Users/vahan`,
   Homebrew). They are unused on this host.
-- The apt `nginx` service on port 80 is the distro default and is unused; the app's nginx
-  is a separate instance started by `run.sh`.
-- No boot persistence yet. To survive reboots, add a systemd unit running `./run.sh`
-  (and have `run.sh stop` invoked on shutdown).
+- The apt `nginx.service` (port 80) is disabled; the only nginx instance is the app's,
+  started and stopped by `run.sh`.
+- There is no daemon at boot: after a reboot, start the app (`./run.sh`, or Start in
+  xdash) and both uvicorn and nginx come up together; `Stop` in xdash stops both.
 - Media is stored as WAV (~40–48 MB per stem). Serving is fast, but the LAN link is the
   bottleneck on WiFi.

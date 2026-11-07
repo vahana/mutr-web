@@ -56,13 +56,17 @@ Open http://localhost:8000 — the BE serves the built frontend.
 nginx serves media straight from disk with `sendfile` + native Range support — Python never touches media bytes.
 
 ```bash
-brew install nginx
-nginx -c "$(pwd)/nginx/nginx.conf" -p "$(pwd)/nginx/"
+# Linux
+sudo apt-get install -y nginx
+sudo systemctl disable --now nginx   # distro default instance on :80 is unused
+
+./run.sh        # uvicorn on server/mutr.sock + nginx on 127.0.0.1:8000
+./run.sh stop   # stops both
 ```
 
 - nginx on **:8000**: FE static (`web/dist`), `/media/*` from `server/data/projects/` (native Range), `/api/*` proxied to uvicorn over a Unix socket
+- `run.sh` owns the lifecycle of both processes — nginx starts and stops with the backend
 - `nginx/nginx.conf` contains absolute paths — adjust if the repo moves
-- Stop: `nginx -c ... -p ... -s stop`
 
 ## Tests
 
