@@ -13,6 +13,9 @@ export function LooperRow() {
     <div className="track-row looper-row">
       <div className="track-left">
         <div className="track-controls looper-controls">
+          <span className="drag-handle looper-handle" aria-hidden="true">
+            ≡
+          </span>
           <span className="swatch looper-swatch" />
           <span className="track-name">Looper</span>
           <LoopBar />

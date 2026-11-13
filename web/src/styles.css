@@ -264,6 +264,11 @@ body {
   cursor: grabbing;
 }
 
+.looper-handle {
+  cursor: default;
+  opacity: 0.4;
+}
+
 .track-name {
   width: 90px;
   flex-shrink: 0;
