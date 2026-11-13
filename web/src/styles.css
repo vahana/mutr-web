@@ -151,6 +151,50 @@ body {
   color: #ccc;
 }
 
+.track-area {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.track-area .track-list {
+  flex: 1;
+  min-width: 0;
+}
+
+.panel-rail {
+  width: 20px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  background: #232323;
+  border: none;
+  border-left: 1px solid #333;
+  color: #888;
+  cursor: pointer;
+}
+
+.panel-rail:hover {
+  background: #2e2e2e;
+  color: #e0e0e0;
+}
+
+.panel-rail-chevron {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.panel-rail-label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
 .track-list {
   flex: 1;
   display: flex;

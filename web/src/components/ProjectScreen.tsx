@@ -81,7 +81,18 @@ export function ProjectScreen() {
           🗑
         </button>
       </div>
-      <TrackList />
+      <div className="track-area">
+        <TrackList />
+        <button
+          className="panel-rail"
+          onClick={toggleControls}
+          title={controlsCollapsed ? 'Show controls (C)' : 'Hide controls (C)'}
+          aria-label={controlsCollapsed ? 'Show controls' : 'Hide controls'}
+        >
+          <span className="panel-rail-chevron">{controlsCollapsed ? '‹' : '›'}</span>
+          <span className="panel-rail-label">Controls</span>
+        </button>
+      </div>
       <VideoPanel />
       <TransportBar />
       <JobDock />
